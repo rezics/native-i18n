@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>intee — Native Example</title>
+		<style>
+			body {
+				font-family: sans-serif;
+				max-width: 480px;
+				margin: 60px auto;
+				padding: 0 16px;
+			}
+			select {
+				margin-bottom: 16px;
+				padding: 4px 8px;
+				font-size: 1rem;
+			}
+			#output {
+				background: #f4f4f4;
+				border-radius: 6px;
+				padding: 20px;
+			}
+			#output p {
+				margin: 8px 0;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>intee native example</h1>
+		<label>
+			Locale:
+			<select id="locale-select">
+				<option value="en-US">en-US</option>
+				<option value="zh-CN">zh-CN</option>
+				<option value="ja-JP">ja-JP</option>
+			</select>
+		</label>
+		<div id="output"></div>
+		<script type="module" src="/src/main.ts"></script>
+	</body>
+</html>

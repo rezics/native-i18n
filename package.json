@@ -1,0 +1,58 @@
+{
+	"name": "@nmnmcc/intee",
+	"version": "1.0.0",
+	"description": "Your translations are your types.",
+	"type": "module",
+	"packageManager": "yarn@4.12.0",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/index.d.mts",
+				"import": "./dist/index.mjs"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"require": "./dist/index.cjs"
+			}
+		},
+		"./react": {
+			"import": {
+				"types": "./dist/react/index.d.mts",
+				"import": "./dist/react/index.mjs"
+			},
+			"require": {
+				"types": "./dist/react/index.d.cts",
+				"require": "./dist/react/index.cjs"
+			}
+		}
+	},
+	"workspaces": [
+		"examples/*"
+	],
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsdown",
+		"prepublishOnly": "yarn build"
+	},
+	"devDependencies": {
+		"@types/react": "^19.2.14",
+		"prettier": "^3.7.4",
+		"react": "^19.2.4",
+		"tsdown": "^0.18.2",
+		"typescript": "^5.9.3",
+		"vitest": "^2.1.9"
+	},
+	"dependencies": {
+		"@formatjs/intl-localematcher": "^0.8.2"
+	},
+	"peerDependencies": {
+		"react": ">=18"
+	},
+	"peerDependenciesMeta": {
+		"react": {
+			"optional": true
+		}
+	}
+}
