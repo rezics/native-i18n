@@ -1,6 +1,6 @@
 import {match as _match} from "@formatjs/intl-localematcher"
 
-export type Data = {[K in string]: string | Function | Data}
+export type Data = {[K in string]: any}
 
 export interface Language<
 	T extends string,
