@@ -16,35 +16,34 @@ export type Languages<T extends string, D extends Data> = readonly [
 	...(readonly Language<T, NoInfer<D>>[])
 ]
 
-export type Match = typeof match
+export const create =
+	<const T extends string, const D extends Data>(
+		languages: Languages<T, D>
+	) =>
+	(tags: string[]): DataPromise<T, D> => {
+		const fallback = languages[0]
 
-export const match = <const T extends string, const D extends Data>(
-	tags: string[],
-	...languages: Languages<T, D>
-): DataPromise<T, D> => {
-	const fallback = languages[0]
+		const result = _match(
+			tags,
+			languages.map(l => l.tag),
+			languages[0].tag,
+			{algorithm: "best fit"}
+		) as T
 
-	const result = _match(
-		tags,
-		languages.map(l => l.tag),
-		languages[0].tag,
-		{algorithm: "best fit"}
-	) as T
+		const {data} = languages.find(({tag}) => tag === result)!
 
-	const {data} = languages.find(({tag}) => tag === result)!
-
-	return new DataPromise(result, fallback.data, (resolve, reject) => {
-		try {
-			if (data instanceof Function) {
-				resolve(data())
-			} else {
-				resolve(data)
+		return new DataPromise(result, fallback.data, (resolve, reject) => {
+			try {
+				if (data instanceof Function) {
+					resolve(data())
+				} else {
+					resolve(data)
+				}
+			} catch (e) {
+				reject(e)
 			}
-		} catch (e) {
-			reject(e)
-		}
-	})
-}
+		})
+	}
 
 export class DataPromise<T extends string, F extends Data> extends Promise<F> {
 	static override get [Symbol.species]() {

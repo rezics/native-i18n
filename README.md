@@ -28,82 +28,148 @@ React integration requires React ≥ 18 as a peer dependency.
 
 ### Core
 
-Define your languages and call `match` with the user's preferred locales:
+Define your languages once, then create a matcher:
 
 ```ts
-import { match } from "@nmnmcc/intee"
+import { create } from "@nmnmcc/intee"
+import enUS from "./languages/en-US"
 
-const en = {
-  tag: "en-US",
-  data: {
-    greeting: "Hello",
-    farewell: "Goodbye",
-  },
-}
-
+const en = { tag: "en-US", data: enUS } as const
 const zh = {
   tag: "zh-CN",
-  // Lazy-loaded data — can be a sync or async function
   data: () => import("./languages/zh-CN").then(m => m.default),
-}
+} as const
+const ja = {
+  tag: "ja-JP",
+  data: () => import("./languages/ja-JP").then(m => m.default),
+} as const
 
-// First language is the fallback
-const result = await match(navigator.languages, en, zh)
-console.log(result.greeting)
+const match = create([en, zh, ja])
+const t = await match(navigator.languages)
+
+console.log(t.greeting)
+console.log(t.items.apple)
+console.log(t.welcome("Alice"))
 ```
 
-`match` returns a `DataPromise<T, D>` — a `Promise<D>` with `.tag` (the matched locale tag) and `.fallback` (synchronous access to the first language's data) properties.
+The first language is the fallback, so it must be available synchronously. It also defines the shape of every other language. Every later language can be plain data, a sync loader, or an async loader, but the data it returns still has to match the fallback shape.
+
+Matching uses BCP 47 locale tags with the `best fit` algorithm. You pass the user's preferred tags in order, IntEE picks the best available language, and only that language's loader runs.
+
+`match(tags)` returns a `DataPromise<T, D>` — a `Promise<D>` with `.tag` (the matched locale tag) and `.fallback` (synchronous access to the fallback language data) properties. Both are available immediately, before the promise resolves.
 
 ### React
 
 ```tsx
-import { createTranslation } from "@nmnmcc/intee/react"
+import { create } from "@nmnmcc/intee/react"
+import enUS from "./languages/en-US"
 
-const en = {
-  tag: "en-US",
-  data: { greeting: "Hello" },
-}
-
+const en = { tag: "en-US", data: enUS } as const
 const zh = {
   tag: "zh-CN",
   data: () => import("./languages/zh-CN").then(m => m.default),
-}
+} as const
 
-const { useTranslation } = createTranslation(en, zh)
+const { useTranslation } = create([en, zh])
 
 function App() {
   const [t, tag] = useTranslation() // uses navigator.languages by default
-  return <h1 lang={tag}>{t.greeting}</h1>
+
+  return (
+    <div lang={tag}>
+      <h1>{t.greeting}</h1>
+      <p>{t.welcome("Alice")}</p>
+      <p>{t("items.apple")}</p>
+    </div>
+  )
 }
 ```
 
-`useTranslation` accepts an optional `tags` array to override the detected locales. It returns `[data, tag]` — rendering immediately with the fallback data and updating once the matched language loads.
+`useTranslation` accepts an optional `tags` array to override the detected locales. Without it, React uses `navigator.languages`.
+
+It returns `[t, tag]`, where `t` works both as your translation object and as a leaf-path lookup function.
+
+That means these are equivalent:
+
+```ts
+t.items.apple
+t("items.apple")
+```
+
+Leaf-path calls are typed. If your data has `items.apple`, `t("items.apple")` returns the same type as `t.items.apple`. Function-valued translations stay functions, so this also works with full type inference:
+
+```ts
+t.welcome("Alice")
+t("welcome")("Alice")
+```
+
+The hook renders immediately with the last resolved translation set if one exists, otherwise with the fallback language. Then it updates when the matched language finishes loading.
 
 ## API
 
-### `match(tags, ...languages)`
+### `create(languages)`
 
-| Parameter   | Type         | Description                                    |
-|-------------|--------------|------------------------------------------------|
-| `tags`      | `string[]`   | BCP 47 locale tags in preference order         |
-| `languages` | `Languages`  | Language definitions; first is the fallback    |
+Creates a locale matcher.
 
-Returns `DataPromise<T, D>` — a `Promise<D>` with `.tag: T` (the matched locale) and `.fallback: D` (the first language's data, synchronously available) properties.
+| Parameter   | Type         | Description                                 |
+|-------------|--------------|---------------------------------------------|
+| `languages` | `Languages`  | Language definitions; first is the fallback |
 
-### `createTranslation(...languages)`
+Returns `(tags: string[]) => DataPromise<T, D>`.
 
-Returns `{ useTranslation(tags?: string[]): readonly [D, T] }`.
+Notes:
+
+- `tags` should be ordered by user preference, usually `navigator.languages`.
+- The returned promise is still a real `Promise`, so `await`, `.then()`, and promise chaining all work normally.
+- `.fallback` gives you the first language's data synchronously, which is what the React binding uses for immediate rendering.
+
+### `react/create(languages)`
+
+Creates React bindings for the same language set.
+
+Returns:
+
+```ts
+{
+  useTranslation(tags?: string[]): readonly [DataFunction<D>, T]
+  match(tags: string[]): DataPromise<T, D>
+}
+```
 
 ### Types
 
 ```ts
-type Data = { [K in string]: string | Function | Data }
+type Data = { [K in string]: any }
 
-interface Language<T extends string, D extends Data> {
+interface Language<T extends string, D extends Data, L extends boolean = true> {
   readonly tag: T
-  readonly data: D | (() => D) | (() => Promise<D>)
+  readonly data: L extends false ? D : D | (() => D) | (() => Promise<D>)
+}
+
+type Languages<T extends string, D extends Data> = readonly [
+  Language<T, D, false>,
+  ...(readonly Language<T, D>[])
+]
+
+class DataPromise<T extends string, D extends Data> extends Promise<D> {
+  readonly tag: T
+  readonly fallback: D
 }
 ```
+
+### React types
+
+```ts
+type DataFunction<D> = D & ((path: string) => unknown)
+```
+
+In practice it stays fully typed: only valid leaf paths are accepted, and the return type matches the selected translation value.
+
+A few details that matter:
+
+- Only leaf paths are callable. `t("items.apple")` is valid; `t("items")` is not.
+- Nested functions are excluded from further path traversal. If `welcome` is a function, `t("welcome")` is valid but `t("welcome.anything")` is not.
+- Keys starting with `$` are treated as literal leaf keys instead of nested path prefixes.
 
 ## License
 

@@ -1,4 +1,4 @@
-import {match} from "@nmnmcc/intee"
+import {create} from "@nmnmcc/intee"
 import enUS from "./languages/en-US"
 
 const en = {tag: "en-US", data: enUS} as const
@@ -11,13 +11,15 @@ const ja = {
 	data: () => import("./languages/ja-JP").then(m => m.default)
 } as const
 
+const match = create([en, zh, ja])
+
 const output = document.getElementById("output")!
 const select = document.getElementById("locale-select") as HTMLSelectElement
 
 async function render(locale: string) {
 	output.textContent = "Loading…"
 
-	const t = await match([locale], en, zh, ja)
+	const t = await match([locale])
 
 	output.innerHTML = `
 		<p><strong>${t.greeting}</strong></p>
