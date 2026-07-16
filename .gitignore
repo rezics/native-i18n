@@ -5,6 +5,7 @@
 !.yarn/sdks
 !.yarn/versions
 
+/references/
 
 node_modules
 dist
