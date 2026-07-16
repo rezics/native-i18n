@@ -1,23 +1,34 @@
 import {
 	create as _create,
+	toTranslationSnapshot,
+	type CreateOptions,
 	type Data,
-	type Languages,
 	type Translation,
-	type TranslationResult
+	type ServerTranslationResult,
+	type ValidLanguages
 } from ".."
 import {toDataFunction} from "../translation"
 
-export type ServerCreateResult<T extends string, D extends Data> = {
+export type ServerCreateResult<
+	T extends string,
+	D extends Data,
+	O extends CreateOptions = CreateOptions
+> = {
 	readonly getTranslation: (
 		tags: readonly string[]
-	) => Promise<TranslationResult<T, D>>
-	readonly match: ReturnType<typeof _create<T, D>>
+	) => Promise<ServerTranslationResult<T, D>>
+	readonly match: ReturnType<typeof _create<T, D, O>>
 }
 
-export const create = <const T extends string, const D extends Data>(
-	languages: Languages<T, D>
-): ServerCreateResult<T, D> => {
-	const match = _create(languages)
+export const create = <
+	const T extends string,
+	const D extends Data,
+	const O extends CreateOptions = {}
+>(
+	languages: ValidLanguages<T, D, O>,
+	options?: O
+): ServerCreateResult<T, D, O> => {
+	const match = _create(languages, options)
 
 	const getTranslation = async (tags: readonly string[]) => {
 		const result = match([...tags])
@@ -25,12 +36,16 @@ export const create = <const T extends string, const D extends Data>(
 		const translation: Translation<T, D> = {
 			data,
 			locale: {
-				current: result.locale.target,
+				current: result.context.locale as T,
 				target: result.locale.target
 			}
 		}
+		const base = {...translation, t: toDataFunction(data)}
+		const snapshot = toTranslationSnapshot(translation, result.context)
 
-		return {...translation, t: toDataFunction(data)}
+		return (snapshot
+			? {...base, snapshot}
+			: base) as unknown as ServerTranslationResult<T, D>
 	}
 
 	return {getTranslation, match}

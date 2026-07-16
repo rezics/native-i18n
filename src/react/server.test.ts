@@ -15,7 +15,7 @@ const zh = {
 
 describe("react/server", () => {
 	test("returns a data function and matched tag", async () => {
-		const {getTranslation} = create([en, zh])
+		const {getTranslation} = create([en, zh], {allowCustomFunctions: true})
 		const {t, locale} = await getTranslation(["zh-CN"])
 
 		expect(locale).toEqual({current: "zh-CN", target: "zh-CN"})

@@ -11,13 +11,18 @@ import {
 } from "react"
 import {
 	create as _create,
+	type ContractOf,
+	type CreateOptions,
 	type Data,
-	type Languages,
+	type DataPromise,
 	type Locale,
 	type Translation,
-	type TranslationResult
+	type TranslationResult,
+	type TranslationSnapshot,
+	type ValidLanguages
 } from ".."
 import {matchTag} from "../match"
+import {hydrate} from "../standard"
 import {toDataFunction} from "../translation"
 
 export type TranslationProviderProps<
@@ -25,13 +30,13 @@ export type TranslationProviderProps<
 	D extends Data = Data
 > = {
 	readonly tags?: readonly string[]
-	readonly initial?: Translation<T, D>
+	readonly initial?: TranslationSnapshot<T, D>
 	readonly children?: ReactNode
 }
 
 export type UseTranslationOptions<T extends string, D extends Data> = {
 	readonly tags?: readonly string[]
-	readonly initial?: Translation<T, D>
+	readonly initial?: TranslationSnapshot<T, D>
 	readonly suspense?: boolean
 }
 
@@ -46,7 +51,7 @@ export type ClientCreateResult<T extends string, D extends Data> = {
 		options?: readonly string[] | Pick<UseTranslationOptions<T, D>, "tags">
 	) => Locale<T>
 	readonly preload: (tags?: readonly string[]) => Promise<Translation<T, D>>
-	readonly match: ReturnType<typeof _create<T, D>>
+	readonly match: (tags: string[]) => DataPromise<T, ContractOf<D>>
 }
 
 type TranslationStore<T extends string, D extends Data> = {
@@ -62,14 +67,27 @@ type TranslationContextValue<T extends string, D extends Data> = {
 	readonly store: TranslationStore<T, D>
 }
 
-export const create = <const T extends string, const D extends Data>(
-	languages: Languages<T, D>
+export const create = <
+	const T extends string,
+	const D extends Data,
+	const O extends CreateOptions = {}
+>(
+	languages: ValidLanguages<T, D, O>,
+	options?: O
 ): ClientCreateResult<T, D> => {
-	const match = _create(languages)
+	const match = _create(languages, options)
+	const fallbackResult = match([])
 	const fallback: Translation<T, D> = {
-		data: languages[0].data,
+		data: fallbackResult.fallback,
 		locale: {current: languages[0].tag, target: languages[0].tag}
 	}
+
+	const fromSnapshot = (
+		snapshot: TranslationSnapshot<T, D>
+	): Translation<T, D> => ({
+		data: hydrate(snapshot.data, snapshot.context) as ContractOf<D>,
+		locale: snapshot.locale
+	})
 
 	const TranslationContext = createContext<
 		TranslationContextValue<T, D> | undefined
@@ -110,10 +128,10 @@ export const create = <const T extends string, const D extends Data>(
 		const result = match([...tags])
 		const promise = result.then(
 			data => {
-				const entry = {
+				const entry: Translation<T, D> = {
 					data,
 					locale: {
-						current: result.locale.target,
+						current: result.context.locale as T,
 						target: result.locale.target
 					}
 				}
@@ -144,17 +162,17 @@ export const create = <const T extends string, const D extends Data>(
 		(typeof navigator !== "undefined" ? [...navigator.languages] : [])
 
 	const isTags = (
-		options:
+		hookOptions:
 			| readonly string[]
 			| UseTranslationOptions<T, D>
 			| Pick<UseTranslationOptions<T, D>, "tags">
 			| undefined
-	): options is readonly string[] => Array.isArray(options)
+	): hookOptions is readonly string[] => Array.isArray(hookOptions)
 
 	const normalizeOptions = (
-		options?: readonly string[] | UseTranslationOptions<T, D>
+		hookOptions?: readonly string[] | UseTranslationOptions<T, D>
 	): UseTranslationOptions<T, D> =>
-		isTags(options) ? {tags: options} : (options ?? {})
+		isTags(hookOptions) ? {tags: hookOptions} : (hookOptions ?? {})
 
 	const keyFor = (tags: readonly string[]) => JSON.stringify(tags)
 
@@ -171,14 +189,13 @@ export const create = <const T extends string, const D extends Data>(
 		const resolvedTags = resolveTags(tags)
 		const store =
 			typeof window === "undefined" ? createStore() : clientStore
-		const entry = await load(store, keyFor(resolvedTags), resolvedTags)
-		return entry
+		return load(store, keyFor(resolvedTags), resolvedTags)
 	}
 
 	const useTranslation = (
-		options?: readonly string[] | UseTranslationOptions<T, D>
+		hookOptions?: readonly string[] | UseTranslationOptions<T, D>
 	) => {
-		const {tags, initial, suspense = false} = normalizeOptions(options)
+		const {tags, initial, suspense = false} = normalizeOptions(hookOptions)
 		const context = useContext(TranslationContext)
 		const store =
 			context?.store ??
@@ -198,8 +215,12 @@ export const create = <const T extends string, const D extends Data>(
 			() => fallbackFor(serverTags),
 			[serverTags]
 		)
+		const hydratedInitial = useMemo(
+			() => (initial ? fromSnapshot(initial) : undefined),
+			[initial]
+		)
 		const initialEntry =
-			initial ??
+			hydratedInitial ??
 			(context?.initialKey === key ? context.initial : undefined)
 
 		writeInitial(store, key, initialEntry)
@@ -214,7 +235,6 @@ export const create = <const T extends string, const D extends Data>(
 				store ? subscribe(store, listener) : () => undefined,
 			[store]
 		)
-
 		const getSnapshot = useCallback(
 			() => store?.cache.get(key) ?? fallbackEntry,
 			[fallbackEntry, key, store]
@@ -237,9 +257,13 @@ export const create = <const T extends string, const D extends Data>(
 	}
 
 	const useLocale = (
-		options?: readonly string[] | Pick<UseTranslationOptions<T, D>, "tags">
+		hookOptions?:
+			| readonly string[]
+			| Pick<UseTranslationOptions<T, D>, "tags">
 	) => {
-		const {tags} = isTags(options) ? {tags: options} : (options ?? {})
+		const {tags} = isTags(hookOptions)
+			? {tags: hookOptions}
+			: (hookOptions ?? {})
 		const context = useContext(TranslationContext)
 		const store =
 			context?.store ??
@@ -298,11 +322,15 @@ export const create = <const T extends string, const D extends Data>(
 			() => (typeof window === "undefined" ? createStore() : clientStore),
 			[]
 		)
+		const initialEntry = useMemo(
+			() => (initial ? fromSnapshot(initial) : undefined),
+			[initial]
+		)
 		const value = tags ?? (initial ? [initial.locale.target] : undefined)
 		const initialKey = initial && value ? keyFor(value) : undefined
-		const context = {tags: value, initial, initialKey, store}
+		const context = {tags: value, initial: initialEntry, initialKey, store}
 
-		if (initial && value) store.cache.set(keyFor(value), initial)
+		if (initialEntry && value) store.cache.set(keyFor(value), initialEntry)
 
 		return createElement(
 			TranslationContext.Provider,

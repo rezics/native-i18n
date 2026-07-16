@@ -25,7 +25,7 @@ async function render(locale: string) {
 	output.innerHTML = `
 		<p><strong>${t.greeting}</strong></p>
 		<p>${t.description}</p>
-		<p>${t.welcome("Alice")}</p>
+		<p>${t.welcome({name: "Alice"})}</p>
 		<p>${t.itemCount(3)}</p>
 		<p>${t.farewell}</p>
 		<p>Items: ${t.items.apple}, ${t.items.banana}, ${t.items.cherry}</p>

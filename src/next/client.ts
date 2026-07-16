@@ -14,10 +14,16 @@ import {
 	type TranslationProviderProps,
 	type UseTranslationOptions
 } from "../react/client"
-import {type Data, type Languages, type TranslationResult} from ".."
+import {
+	type CreateOptions,
+	type Data,
+	type Languages,
+	type TranslationResult,
+	type ValidLanguages
+} from ".."
 import {normalizeLanguageTag} from "../locale"
 
-export type NextClientCreateOptions = {
+export type NextClientCreateOptions = CreateOptions & {
 	readonly cookieName?: string | false
 	readonly cookieMaxAge?: number
 	readonly cookiePath?: string
@@ -65,45 +71,38 @@ export type NextClientCreateResultWithoutLocaleSetter<
 	D extends Data
 > = NextClientCreateResultBase<T, D>
 
+type NextResultFor<
+	T extends string,
+	D extends Data,
+	O extends NextClientCreateOptions
+> = O extends {readonly cookieName: false}
+	? NextClientCreateResultWithoutLocaleSetter<T, D>
+	: "cookieName" extends keyof O
+		? false extends O["cookieName"]
+			?
+					| NextClientCreateResultWithoutLocaleSetter<T, D>
+					| NextClientCreateResult<T, D>
+			: NextClientCreateResult<T, D>
+		: NextClientCreateResult<T, D>
+
 const defaultCookieName = "NEXT_LOCALE"
 const defaultCookieMaxAge = 60 * 60 * 24 * 365
 const defaultCookiePath = "/"
 
-export function create<const T extends string, const D extends Data>(
-	languages: Languages<T, D>
-): NextClientCreateResult<T, D>
-export function create<const T extends string, const D extends Data>(
-	languages: Languages<T, D>,
-	options: NextClientCreateOptions & {readonly cookieName: false}
-): NextClientCreateResultWithoutLocaleSetter<T, D>
-export function create<const T extends string, const D extends Data>(
-	languages: Languages<T, D>,
-	options: Omit<NextClientCreateOptions, "cookieName"> & {
-		readonly cookieName?: string
-	}
-): NextClientCreateResult<T, D>
-export function create<
+export const create = <
 	const T extends string,
 	const D extends Data,
-	const O extends NextClientCreateOptions
+	const O extends NextClientCreateOptions = {}
 >(
-	languages: Languages<T, D>,
-	options: O
-): O extends {readonly cookieName: false}
-	? NextClientCreateResultWithoutLocaleSetter<T, D>
-	: false extends O["cookieName"]
-		?
-				| NextClientCreateResultWithoutLocaleSetter<T, D>
-				| NextClientCreateResult<T, D>
-		: NextClientCreateResult<T, D>
-export function create<const T extends string, const D extends Data>(
-	languages: Languages<T, D>,
-	options: NextClientCreateOptions = {}
-):
-	| NextClientCreateResultWithoutLocaleSetter<T, D>
-	| NextClientCreateResult<T, D> {
-	const resolvedOptions = options
-	const react = createReactClient(languages)
+	languages: ValidLanguages<T, D, O>,
+	options?: O
+): NextResultFor<T, D, O> => {
+	const resolvedOptions = options ?? ({} as O)
+	const makeReactClient = createReactClient as unknown as (
+		languages: Languages<T, D>,
+		options?: CreateOptions
+	) => ClientCreateResult<T, D>
+	const react = makeReactClient(languages, resolvedOptions)
 	const cookieName = resolvedOptions.cookieName ?? defaultCookieName
 
 	const TranslationProvider: NextClientCreateResultBase<
@@ -161,9 +160,9 @@ export function create<const T extends string, const D extends Data>(
 		useLocale
 	}
 
-	if (cookieName === false) return result
+	if (cookieName === false) return result as unknown as NextResultFor<T, D, O>
 
-	return {...result, useSetLocale}
+	return {...result, useSetLocale} as unknown as NextResultFor<T, D, O>
 }
 
 const serializeCookie = (

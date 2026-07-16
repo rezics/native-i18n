@@ -1,31 +1,43 @@
 import {cookies, headers} from "next/headers"
 import {
 	create as _create,
+	toTranslationSnapshot,
+	type CreateOptions,
 	type Data,
-	type Languages,
 	type Translation,
-	type TranslationResult
+	type ServerTranslationResult,
+	type ValidLanguages
 } from ".."
 import {normalizeLanguageTag, parseAcceptLanguage} from "../locale"
 import {toDataFunction} from "../translation"
 
-export type NextCreateOptions = {readonly cookieName?: string | false}
+export type NextCreateOptions = CreateOptions & {
+	readonly cookieName?: string | false
+}
 
-export type NextCreateResult<T extends string, D extends Data> = {
+export type NextCreateResult<
+	T extends string,
+	D extends Data,
+	O extends NextCreateOptions = NextCreateOptions
+> = {
 	readonly getTranslation: (
 		tags?: readonly string[]
-	) => Promise<TranslationResult<T, D>>
+	) => Promise<ServerTranslationResult<T, D>>
 	readonly getLocaleTags: () => Promise<string[]>
-	readonly match: ReturnType<typeof _create<T, D>>
+	readonly match: ReturnType<typeof _create<T, D, O>>
 }
 
 const defaultCookieName = "NEXT_LOCALE"
 
-export const create = <const T extends string, const D extends Data>(
-	languages: Languages<T, D>,
-	options: NextCreateOptions = {}
-): NextCreateResult<T, D> => {
-	const match = _create(languages)
+export const create = <
+	const T extends string,
+	const D extends Data,
+	const O extends NextCreateOptions = {}
+>(
+	languages: ValidLanguages<T, D, O>,
+	options: O = {} as O
+): NextCreateResult<T, D, O> => {
+	const match = _create(languages, options)
 	const cookieName = options.cookieName ?? defaultCookieName
 
 	const getLocaleTags = async () => {
@@ -53,12 +65,16 @@ export const create = <const T extends string, const D extends Data>(
 		const translation: Translation<T, D> = {
 			data,
 			locale: {
-				current: result.locale.target,
+				current: result.context.locale as T,
 				target: result.locale.target
 			}
 		}
+		const base = {...translation, t: toDataFunction(data)}
+		const snapshot = toTranslationSnapshot(translation, result.context)
 
-		return {...translation, t: toDataFunction(data)}
+		return (snapshot
+			? {...base, snapshot}
+			: base) as unknown as ServerTranslationResult<T, D>
 	}
 
 	return {getTranslation, getLocaleTags, match}

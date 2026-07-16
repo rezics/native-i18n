@@ -16,7 +16,7 @@ export default async function Page() {
 			<p style={{color: "#666", marginBottom: 8}}>{locale.current}</p>
 			<h1>{t.greeting}</h1>
 			<p>{t.description}</p>
-			<p>{t.welcome("Alice")}</p>
+			<p>{t.welcome({name: "Alice"})}</p>
 			<p>{t("itemCount")(3)}</p>
 			<Suspense fallback={null}>
 				<LocaleSwitcher />

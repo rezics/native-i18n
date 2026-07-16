@@ -2,205 +2,256 @@
 
 Your translations are your types.
 
-## Why IntEE?
+IntEE keeps translations as ordinary TypeScript data. Standard i18n operations
+are real, strongly typed functions at development time and versioned,
+serializable recipes when they cross a React Server Components boundary.
 
-Most i18n libraries took a wrong turn somewhere.
-
-They made you register namespaces, configure plugins, wrap your app in
-providers, learn their own interpolation syntax, and maintain separate type
-declaration files just to get autocompletion. Some solved the type safety
-problem by generating code. Others asked you to learn a new DSL. All of them
-grew complex enough to need a migration guide.
-
-The root mistake was treating i18n as infrastructure — something to install,
-configure, and manage — rather than what it actually is: **loading the right
-data for the user's locale**.
-
-IntEE does exactly that and nothing more. Your translations are plain objects.
-The match logic is a single function call. Types flow automatically because your
-data _is_ the type. Lazy loading is opt-in per language, not a build-time
-concern. There's no runtime format string parser because you don't need one —
-template literals exist.
-
-The result is an API small enough to read in five minutes and powerful enough to
-handle real apps. No config. No codegen. No magic. Just the right abstraction.
+There is no schema generation, message compiler, or runtime validation
+dependency. TypeScript validates authoring; native Intl implements locale
+semantics.
 
 ## Installation
 
 ```bash
 npm install @nmnmcc/intee
-# or
-yarn add @nmnmcc/intee
 ```
 
-React integration requires React ≥ 18 as a peer dependency.
+React integration requires React 18 or newer. Next.js App Router integration
+requires Next.js 15 or newer.
 
-## Usage
-
-### Core
-
-Define your languages once, then create a matcher:
+## Quick start
 
 ```ts
-import {create} from "@nmnmcc/intee"
-import enUS from "./languages/en-US"
+import {create, currency, insert, integer, plural} from "@nmnmcc/intee"
 
-const en = {tag: "en-US", data: enUS} as const
+const en = {
+	tag: "en-US",
+	data: {
+		greeting: insert("Hello {{name}}. You are {{age}}.", {
+			name: String,
+			age: integer()
+		}),
+		files: plural({one: "# file", other: "# files"}),
+		price: currency("USD")
+	}
+} as const
+
 const zh = {
 	tag: "zh-CN",
-	data: () => import("./languages/zh-CN").then(m => m.default)
-} as const
-const ja = {
-	tag: "ja-JP",
-	data: () => import("./languages/ja-JP").then(m => m.default)
+	data: () => import("./zh-CN").then(module => module.default)
 } as const
 
-const match = create([en, zh, ja])
+const match = create([en, zh], {timeZone: "UTC"})
 const t = await match(navigator.languages)
 
-console.log(t.greeting)
-console.log(t.items.apple)
-console.log(t.welcome("Alice"))
+t.greeting({name: "Ada", age: 37})
+t.files(2)
+t.price(12)
 ```
 
-The first language is the fallback, so it must be available synchronously. It
-also defines the shape of every other language. Every later language can be
-plain data, a sync loader, or an async loader, but the data it returns still has
-to match the fallback shape.
+The first language is the synchronous fallback and defines the required shape of
+every other language. Later languages may contain data, a synchronous loader, or
+an asynchronous loader.
 
-Matching uses BCP 47 locale tags with the `best fit` algorithm. You pass the
-user's preferred tags in order, IntEE picks the best available language, and
-only that language's loader runs.
+## Standard message functions
 
-`match(tags)` returns a `DataPromise<T, D>` — a `Promise<D>` with `.locale` and
-`.fallback` properties available immediately, before the promise resolves.
+### insert and rich values
 
-`locale.current` is the language backing the data you can render right now.
-`locale.target` is the best matched language IntEE is loading or has loaded.
-Before a lazy language resolves, `current` is the fallback language and `target`
-is the matched language. After server-side `await` or a suspenseful client
-render, both point at the matched language.
+insert extracts placeholders from a string literal and uses the field map as the
+function contract:
 
-### React
+```ts
+const greeting = insert("Hello {{name}}. {{age}}", {
+	name: String,
+	age: integer()
+})
+
+greeting({name: "Ada", age: 37})
+```
+
+Missing placeholders are TypeScript errors:
+
+```ts
+insert("Hello {{name}}. {{age}}", {
+	name: String
+	// TypeScript error: age is missing
+})
+```
+
+Unexpected fields are also errors. When two locales intentionally share a
+function signature but one template does not use a field, mark that decision:
+
+```ts
+const japanese = insert("{{age}}歳", {name: unused(String), age: integer()})
+```
+
+Use value<T>() for a ReactNode or another value that must not be converted to a
+string. The result is an array of string/value parts:
 
 ```tsx
-import {create} from "@nmnmcc/intee/react"
-import enUS from "./languages/en-US"
+const linked = insert("Read {{link}} now", {link: value<React.ReactNode>()})
 
-const en = {tag: "en-US", data: enUS} as const
-const zh = {
-	tag: "zh-CN",
-	data: () => import("./languages/zh-CN").then(m => m.default)
-} as const
+linked({link: <a href="/docs">the docs</a>})
+```
 
-const {useTranslation} = create([en, zh])
+rich is an alias of insert for code that wants to make this intent explicit.
 
-function App() {
-	const {t, locale} = useTranslation() // uses navigator.languages by default
+### plural, ordinal, select, and range
 
-	return (
-		<div lang={locale.current}>
-			<h1>{t.greeting}</h1>
-			<p>{t.welcome("Alice")}</p>
-			<p>{t("items.apple")}</p>
-		</div>
-	)
+```ts
+const files = plural({"=0": "No files", "one": "# file", "other": "# files"})
+
+const position = ordinal({one: "#st", two: "#nd", few: "#rd", other: "#th"})
+
+const role = select({admin: "Administrator", other: "Member"})
+
+const size = range(
+	[
+		{max: 0, value: "empty"},
+		{min: 1, max: 9, value: "small"},
+		{min: 10, value: "large"}
+	],
+	"unknown"
+)
+```
+
+plural and ordinal follow Intl.PluralRules and CLDR semantics. Exact =n cases
+win before category selection, other is required, and plural supports offset.
+The # token is formatted with the active locale. Choice templates can use the
+same typed field maps as insert.
+
+## Standard Intl functions
+
+All formatters are callable functions and are rebound to the actual loaded
+language by create:
+
+| Area              | Functions                                         |
+| ----------------- | ------------------------------------------------- |
+| Numbers           | number, integer, currency, percent, unit, compact |
+| Date/time         | date, time, datetime                              |
+| Relative/duration | relativeTime, duration                            |
+| Composition       | list, displayName                                 |
+
+Examples:
+
+```ts
+const data = {
+	amount: currency("EUR"),
+	progress: percent(),
+	distance: unit("kilometer"),
+	published: datetime({dateStyle: "medium", timeStyle: "short"}),
+	ago: relativeTime("day", {numeric: "auto"}),
+	names: list({type: "conjunction"}),
+	region: displayName("region")
 }
 ```
 
-`useTranslation` accepts either a locale tag array or an options object. Without
-explicit tags, React uses `navigator.languages`.
+Important semantics:
 
-It returns `{ t, data, locale }`, where `t` works both as your translation
-object and as a leaf-path lookup function.
+- percent follows Intl exactly: 0.25 means 25%. IntEE never guesses or divides
+  values by 100.
+- relativeTime requires an explicit unit, either when the helper is created or
+  when it is called. IntEE does not approximate months or years.
+- date/time helpers use the create timeZone. It defaults to UTC for
+  deterministic server/client output.
+- duration uses native Intl.DurationFormat. Runtimes without it need a
+  standards-compliant polyfill before the function is invoked.
+- Formatter instances use a bounded cache; the cache cannot grow without limit
+  across requests.
 
-That means these are equivalent:
+createIntl({locale, timeZone}) exposes bound native Intl formatter factories for
+advanced cases without adding custom translation functions.
+
+## Matching and locale state
 
 ```ts
-t.items.apple
-t("items.apple")
+const result = match(["zh-CN"])
+
+result.locale.current // fallback data available immediately
+result.locale.target // best matched target
+result.fallback // materialized fallback translation
+
+const data = await result
 ```
 
-Leaf-path calls are typed. If your data has `items.apple`, `t("items.apple")`
-returns the same type as `t.items.apple`. Function-valued translations stay
-functions, so this also works with full type inference:
+Matching uses BCP 47 tags and best-fit matching. Only the selected loader runs.
+DataPromise is a Promise with locale, fallback, tag, and execution context
+available immediately.
 
-```ts
-t.welcome("Alice")
-t("welcome")("Alice")
-```
+The immediate DataPromise locale preserves the fallback/current loading state.
+Completed server and React translations report the actual loaded locale. If a
+client loader fails, current remains the fallback while target preserves the
+requested locale.
 
-By default, the hook renders immediately with the resolved translation set if
-one exists, otherwise with the fallback language. In that fallback render,
-`locale.current` is the fallback tag and `locale.target` is the matched tag.
-Then it updates when the matched language finishes loading.
-
-For UI that should wait for the target language, opt into Suspense:
+## React
 
 ```tsx
-const {t, locale} = useTranslation({suspense: true})
-```
-
-For apps that already loaded translation data on the server, seed the client
-cache:
-
-```tsx
-const translation = await getTranslation(["zh-CN"])
-
-<TranslationProvider tags={["zh-CN"]} initial={translation}>
-  {children}
-</TranslationProvider>
-```
-
-Only pass `initial` across a Server Component boundary when the translation data
-is serializable. If your translation objects contain functions, use Suspense
-instead.
-
-For RSC-friendly apps, use the explicit server/client entry points:
-
-```tsx
-// i18n/server.ts
-import {create} from "@nmnmcc/intee/react/server"
+import {create} from "@nmnmcc/intee/react"
 import {languages} from "./languages"
 
-export const {getTranslation} = create(languages)
-```
+const {useTranslation} = create(languages)
 
-```tsx
-// app/page.tsx
-import {getTranslation} from "./i18n/server"
-
-export default async function Page() {
-	const {t, locale} = await getTranslation(["zh-CN"])
+function Page() {
+	const {t, locale} = useTranslation()
 
 	return (
 		<main lang={locale.current}>
 			<h1>{t.greeting}</h1>
-			<p>{t.welcome("Alice")}</p>
+			<p>{t.welcome({name: "Ada"})}</p>
 		</main>
 	)
 }
 ```
 
-```tsx
-// i18n/client.ts
-"use client"
+useTranslation uses navigator.languages by default. Pass a tag list or {tags,
+suspense} to override it. It returns {data, locale, t}; t is both the
+translation object and a typed leaf-path lookup:
 
-import {create} from "@nmnmcc/intee/react/client"
-import {languages} from "./languages"
-
-export const {TranslationProvider, useTranslation} = create(languages)
+```ts
+t.items.apple
+t("items.apple")
+t.welcome({name: "Ada"})
+t("welcome")({name: "Ada"})
 ```
 
-Only pass serializable values across the RSC boundary. Locale tags are always
-safe. A translation `initial` snapshot is safe only when your translation data
-is serializable.
+## React Server Components
 
-### Next.js App Router
+Ordinary JavaScript closures cannot cross an RSC boundary. IntEE standard
+functions can, because the server sends recipes and the client rebuilds
+functions with the same locale and time zone.
 
-Next.js support lives in a separate entry point:
+```ts
+// i18n/server.ts
+import {create} from "@nmnmcc/intee/react/server"
+import {languages} from "./languages"
+
+export const {getTranslation} = create(languages, {timeZone: "UTC"})
+```
 
 ```tsx
+// Server Component
+const translation = await getTranslation(["zh-CN"])
+
+return (
+	<TranslationProvider tags={["zh-CN"]} initial={translation.snapshot}>
+		{children}
+	</TranslationProvider>
+)
+```
+
+The server result contains:
+
+- data: materialized server functions.
+- t: the server-only typed lookup function.
+- locale: current and target locale.
+- snapshot: function-free recipe data for a Client Component.
+
+Pass snapshot, never the complete server result, across the boundary.
+TranslationProvider hydrates the snapshot once and memoizes it.
+
+## Next.js App Router
+
+```ts
 // app/i18n/server.ts
 import {create} from "@nmnmcc/intee/next"
 import {languages} from "./languages"
@@ -208,109 +259,82 @@ import {languages} from "./languages"
 export const {getLocaleTags, getTranslation} = create(languages)
 ```
 
-```tsx
+```ts
 // app/i18n/client.ts
 "use client"
 
 import {create} from "@nmnmcc/intee/next/client"
 import {languages} from "./languages"
 
-export const {TranslationProvider, useSetLocale, useTranslation} =
+export const {TranslationProvider, useLocale, useSetLocale, useTranslation} =
 	create(languages)
 ```
 
-In the Next.js client entry point, `useTranslation` and `useLocale` always use
-Suspense. This keeps Server Component HTML in place during hydration until the
-target language is ready on the client, instead of briefly rendering
-fallback-language text. `TranslationProvider` includes the Suspense boundary for
-its children. For a client-only update that may suspend after mount, place a
-closer `<Suspense>` boundary around that feature, or pass a scoped `fallback` to
-`TranslationProvider`, so unrelated UI stays visible.
-
 ```tsx
 // app/layout.tsx
-import {TranslationProvider} from "./i18n/client"
-import {getLocaleTags, getTranslation} from "./i18n/server"
+const tags = await getLocaleTags()
+const {locale, snapshot} = await getTranslation(tags)
 
-export default async function RootLayout({children}) {
-	const tags = await getLocaleTags()
-	const {locale} = await getTranslation(tags)
-
-	return (
-		<html lang={locale.current}>
-			<body>
-				<TranslationProvider tags={tags}>
-					{children}
-				</TranslationProvider>
-			</body>
-		</html>
-	)
-}
+return (
+	<html lang={locale.current}>
+		<body>
+			<TranslationProvider tags={tags} initial={snapshot}>
+				{children}
+			</TranslationProvider>
+		</body>
+	</html>
+)
 ```
 
-`getLocaleTags()` reads the request in App Router Server Components. It checks
-the `NEXT_LOCALE` cookie first, then falls back to the `accept-language` header.
-You can change or disable the cookie with `create(languages, { cookieName })`.
-When you disable it with `cookieName: false`, the client result does not include
-`useSetLocale`; use locale-aware routes or another app-owned persistence
-strategy instead.
+getLocaleTags checks NEXT_LOCALE before Accept-Language. Configure cookieName,
+cookieMaxAge, cookiePath, cookieSameSite, and cookieSecure in create options.
+With cookieName: false, the client result intentionally omits useSetLocale.
 
-Client language switchers can call `useSetLocale()`. It writes the locale cookie
-and calls `router.refresh()`, so the next Server Component render uses the
-chosen locale. Locale tags are canonicalized before they are stored; invalid
-values are ignored. The cookie defaults to `SameSite=Lax` and automatically adds
-`Secure` on HTTPS. It is intentionally client-readable so this hook can update
-it. If your application requires an `HttpOnly` preference cookie, set it in an
-app-owned Server Action or Route Handler instead, then refresh the route.
+Next client translation hooks use Suspense so fallback-language content does not
+replace resolved Server Component HTML during hydration.
+
+## Custom functions
+
+Unbranded custom functions are forbidden by default, recursively and at both the
+TypeScript and runtime boundaries:
+
+```ts
+create([{tag: "en", data: {message: (name: string) => name}}])
+// TypeScript error
+```
+
+Legacy/native-only code can opt in:
+
+```ts
+create(languages, {allowCustomFunctions: true})
+```
+
+allowCustomFunctions is marked @deprecated in TypeScript. Custom functions still
+execute, so existing flexibility is not removed, but they cannot produce an RSC
+snapshot. Prefer insert, plural, select, and the Intl helpers.
+
+## Optional AST and transport tools
+
+The authoring API is function-first. Recipe tools live in a separate entry
+point:
+
+```ts
+import {
+	RECIPE_VERSION,
+	compile,
+	dehydrate,
+	describe,
+	hydrate
+} from "@nmnmcc/intee/ast"
+```
+
+Use these tools for transport, inspection, editor integrations, or persistence.
+Recipes are versioned, unknown versions/operations are rejected, and dehydration
+rejects custom functions and circular translation data.
 
 ## Examples
 
-### Synchronous fallback access
-
-The returned promise exposes `.locale` and `.fallback` immediately, before
-resolution:
-
-```ts
-const result = match(navigator.languages)
-
-console.log(result.locale.current) // "en-US" — data available now
-console.log(result.locale.target) // "zh-CN" — matched locale
-console.log(result.fallback) // en-US data, always available
-
-const t = await result // zh-CN data, once loaded
-```
-
-### Leaf-path lookup (React)
-
-`t` doubles as a function that accepts dot-separated leaf paths:
-
-```ts
-t.items.apple
-t("items.apple") // equivalent
-
-t.welcome("Alice")
-t("welcome")("Alice") // equivalent
-```
-
-Only leaf paths are valid — `t("items")` won't compile. Keys starting with `$`
-are treated as literal leaves, not nested path prefixes.
-
-### Custom locale override (React)
-
-```tsx
-const {t, locale} = useTranslation(["ja-JP"])
-```
-
-### Using `match` outside React
-
-The React binding also exports `match` for use in non-component code:
-
-```ts
-const {useTranslation, match} = create([en, zh, ja])
-
-// in a loader, server handler, etc.
-const t = await match(["en-US"])
-```
+Runnable native, React, and Next.js examples are in the examples directory.
 
 ## License
 

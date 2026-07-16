@@ -40,7 +40,7 @@ export default function App() {
 					<strong>{t.greeting}</strong>
 				</p>
 				<p>{t.description}</p>
-				<p>{t.welcome("Alice")}</p>
+				<p>{t.welcome({name: "Alice"})}</p>
 				<p>{t("itemCount")(3)}</p>
 				<p>{t("farewell")}</p>
 				<p>

@@ -41,7 +41,8 @@ describe("react/client", () => {
 					tags: ["zh-CN"],
 					initial: {
 						data: {greeting: "你好"},
-						locale: {current: "zh-CN", target: "zh-CN"}
+						locale: {current: "zh-CN", target: "zh-CN"},
+						context: {locale: "zh-CN", timeZone: "UTC"}
 					}
 				},
 				createElement(function Login() {
@@ -70,6 +71,10 @@ describe("react/client", () => {
 				readonly current: "zh-CN"
 				readonly target: "zh-CN"
 			}
+			readonly context: {
+				readonly locale: "zh-CN"
+				readonly timeZone: "UTC"
+			}
 		}) => {
 			const providerProps = initial
 				? {tags: ["zh-CN"], initial}
@@ -92,7 +97,8 @@ describe("react/client", () => {
 		expect(
 			await render({
 				data: {greeting: "request-A-only"},
-				locale: {current: "zh-CN", target: "zh-CN"}
+				locale: {current: "zh-CN", target: "zh-CN"},
+				context: {locale: "zh-CN", timeZone: "UTC"}
 			})
 		).toContain("request-A-only")
 		expect(await render()).toContain("loader-value")

@@ -15,6 +15,16 @@
 				"require": "./dist/index.cjs"
 			}
 		},
+		"./ast": {
+			"import": {
+				"types": "./dist/ast.d.mts",
+				"import": "./dist/ast.mjs"
+			},
+			"require": {
+				"types": "./dist/ast.d.cts",
+				"require": "./dist/ast.cjs"
+			}
+		},
 		"./react": {
 			"import": {
 				"types": "./dist/react/index.d.mts",

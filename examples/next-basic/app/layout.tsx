@@ -5,12 +5,12 @@ export default async function RootLayout({
 	children
 }: Readonly<{children: React.ReactNode}>) {
 	const tags = await getLocaleTags()
-	const {locale} = await getTranslation(tags)
+	const {locale, snapshot} = await getTranslation(tags)
 
 	return (
 		<html lang={locale.current}>
 			<body>
-				<TranslationProvider tags={tags}>
+				<TranslationProvider tags={tags} initial={snapshot}>
 					{children}
 				</TranslationProvider>
 			</body>
