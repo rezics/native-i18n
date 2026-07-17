@@ -1009,48 +1009,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nmnmcc/intee@link:../..::locator=native-basic%40workspace%3Aexamples%2Fnative-basic":
-  version: 0.0.0-use.local
-  resolution: "@nmnmcc/intee@link:../..::locator=native-basic%40workspace%3Aexamples%2Fnative-basic"
-  languageName: node
-  linkType: soft
-
-"@nmnmcc/intee@link:../..::locator=next-basic%40workspace%3Aexamples%2Fnext-basic":
-  version: 0.0.0-use.local
-  resolution: "@nmnmcc/intee@link:../..::locator=next-basic%40workspace%3Aexamples%2Fnext-basic"
-  languageName: node
-  linkType: soft
-
-"@nmnmcc/intee@link:../..::locator=react-basic%40workspace%3Aexamples%2Freact-basic":
-  version: 0.0.0-use.local
-  resolution: "@nmnmcc/intee@link:../..::locator=react-basic%40workspace%3Aexamples%2Freact-basic"
-  languageName: node
-  linkType: soft
-
-"@nmnmcc/intee@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "@nmnmcc/intee@workspace:."
-  dependencies:
-    "@formatjs/intl-localematcher": "npm:^0.8.2"
-    "@types/react": "npm:^19.2.14"
-    next: "npm:15.5.20"
-    prettier: "npm:^3.7.4"
-    react: "npm:^19.2.7"
-    react-dom: "npm:^19.2.7"
-    tsdown: "npm:^0.18.2"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^2.1.9"
-  peerDependencies:
-    next: ">=15"
-    react: ">=18"
-  peerDependenciesMeta:
-    next:
-      optional: true
-    react:
-      optional: true
-  languageName: unknown
-  linkType: soft
-
 "@npmcli/agent@npm:^4.0.0":
   version: 4.0.0
   resolution: "@npmcli/agent@npm:4.0.0"
@@ -2495,9 +2453,51 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "native-basic@workspace:examples/native-basic"
   dependencies:
-    "@nmnmcc/intee": "link:../.."
+    native-i18n: "link:../.."
     typescript: "npm:^5.9.3"
     vite: "npm:^6.3.5"
+  languageName: unknown
+  linkType: soft
+
+"native-i18n@link:../..::locator=native-basic%40workspace%3Aexamples%2Fnative-basic":
+  version: 0.0.0-use.local
+  resolution: "native-i18n@link:../..::locator=native-basic%40workspace%3Aexamples%2Fnative-basic"
+  languageName: node
+  linkType: soft
+
+"native-i18n@link:../..::locator=next-basic%40workspace%3Aexamples%2Fnext-basic":
+  version: 0.0.0-use.local
+  resolution: "native-i18n@link:../..::locator=next-basic%40workspace%3Aexamples%2Fnext-basic"
+  languageName: node
+  linkType: soft
+
+"native-i18n@link:../..::locator=react-basic%40workspace%3Aexamples%2Freact-basic":
+  version: 0.0.0-use.local
+  resolution: "native-i18n@link:../..::locator=react-basic%40workspace%3Aexamples%2Freact-basic"
+  languageName: node
+  linkType: soft
+
+"native-i18n@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "native-i18n@workspace:."
+  dependencies:
+    "@formatjs/intl-localematcher": "npm:^0.8.2"
+    "@types/react": "npm:^19.2.14"
+    next: "npm:15.5.20"
+    prettier: "npm:^3.7.4"
+    react: "npm:^19.2.7"
+    react-dom: "npm:^19.2.7"
+    tsdown: "npm:^0.18.2"
+    typescript: "npm:^5.9.3"
+    vitest: "npm:^2.1.9"
+  peerDependencies:
+    next: ">=15"
+    react: ">=18"
+  peerDependenciesMeta:
+    next:
+      optional: true
+    react:
+      optional: true
   languageName: unknown
   linkType: soft
 
@@ -2512,10 +2512,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "next-basic@workspace:examples/next-basic"
   dependencies:
-    "@nmnmcc/intee": "link:../.."
     "@types/node": "npm:26.1.0"
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
+    native-i18n: "link:../.."
     next: "npm:15.5.20"
     react: "npm:^19.2.7"
     react-dom: "npm:^19.2.7"
@@ -2749,10 +2749,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "react-basic@workspace:examples/react-basic"
   dependencies:
-    "@nmnmcc/intee": "link:../.."
     "@types/react": "npm:19"
     "@types/react-dom": "npm:19"
     "@vitejs/plugin-react": "npm:^4.4.1"
+    native-i18n: "link:../.."
     react: "npm:^19.2.7"
     react-dom: "npm:^19.2.7"
     typescript: "npm:^5.9.3"

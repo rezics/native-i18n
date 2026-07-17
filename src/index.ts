@@ -55,7 +55,7 @@ export interface CreateOptions {
 	readonly timeZone?: string
 	/**
 	 * @deprecated Custom functions cannot cross a React Server Components boundary
-	 * and cannot be represented by a translation snapshot. Prefer Intee's standard
+	 * and cannot be represented by a translation snapshot. Prefer Native I18n's standard
 	 * message and Intl helpers.
 	 */
 	readonly allowCustomFunctions?: true

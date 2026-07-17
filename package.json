@@ -1,7 +1,15 @@
 {
-	"name": "@nmnmcc/intee",
-	"version": "3.2.0",
+	"name": "native-i18n",
+	"version": "0.0.1",
 	"description": "Your translations are your types.",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/rezics/native-i18n.git"
+	},
+	"bugs": {
+		"url": "https://github.com/rezics/native-i18n/issues"
+	},
+	"homepage": "https://github.com/rezics/native-i18n#readme",
 	"type": "module",
 	"packageManager": "yarn@4.12.0",
 	"exports": {

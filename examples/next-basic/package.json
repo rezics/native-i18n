@@ -3,12 +3,12 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "yarn workspace @nmnmcc/intee build && next dev",
-		"build": "yarn workspace @nmnmcc/intee build && next build",
+		"dev": "yarn workspace native-i18n build && next dev",
+		"build": "yarn workspace native-i18n build && next build",
 		"start": "next start"
 	},
 	"dependencies": {
-		"@nmnmcc/intee": "link:../..",
+		"native-i18n": "link:../..",
 		"next": "15.5.20",
 		"react": "^19.2.7",
 		"react-dom": "^19.2.7"

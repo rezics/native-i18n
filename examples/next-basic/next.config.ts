@@ -8,7 +8,7 @@ const monorepoRoot = path.join(
 )
 
 const nextConfig: NextConfig = {
-	transpilePackages: ["@nmnmcc/intee"],
+	transpilePackages: ["native-i18n"],
 	outputFileTracingRoot: monorepoRoot
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import {create} from "@nmnmcc/intee/next/client"
+import {create} from "native-i18n/next/client"
 import {languages} from "./languages"
 
 export const {

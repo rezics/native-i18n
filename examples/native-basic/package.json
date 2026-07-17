@@ -11,6 +11,6 @@
 		"vite": "^6.3.5"
 	},
 	"dependencies": {
-		"@nmnmcc/intee": "link:../.."
+		"native-i18n": "link:../.."
 	}
 }

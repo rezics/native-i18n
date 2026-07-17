@@ -15,7 +15,7 @@ export type FieldRecipe =
 	| {readonly kind: "format"; readonly recipe: Recipe}
 
 type RecipeBase = {
-	readonly $intee: typeof RECIPE_VERSION
+	readonly $nativeI18n: typeof RECIPE_VERSION
 	readonly version: typeof RECIPE_VERSION
 }
 
@@ -65,7 +65,7 @@ export type FormatRecipe = RecipeBase & {
 
 export type Recipe = InsertRecipe | ChoiceRecipe | RangeRecipe | FormatRecipe
 
-const recipeSymbol: unique symbol = Symbol("@nmnmcc/intee/recipe")
+const recipeSymbol: unique symbol = Symbol("native-i18n/recipe")
 
 export type StandardFunction<F extends AnyFunction = AnyFunction> = F & {
 	readonly [recipeSymbol]: Recipe
@@ -129,8 +129,8 @@ export type SnapshotData<T> =
 						: T extends object
 							? {[K in keyof T]: SnapshotData<T[K]>}
 							: T
-export class InteeSerializationError extends TypeError {
-	override readonly name = "InteeSerializationError"
+export class NativeI18nSerializationError extends TypeError {
+	override readonly name = "NativeI18nSerializationError"
 }
 
 const defaultContext: ExecutionContext = {locale: "en", timeZone: "UTC"}
@@ -234,24 +234,24 @@ const recipeOperations = new Set<string>([
 ])
 
 const parseRecipe = (value: unknown): Recipe | undefined => {
-	if (!value || typeof value !== "object" || !("$intee" in value))
+	if (!value || typeof value !== "object" || !("$nativeI18n" in value))
 		return undefined
 
 	const envelope = value as {
-		readonly $intee?: unknown
+		readonly $nativeI18n?: unknown
 		readonly version?: unknown
 		readonly op?: unknown
 	}
 	if (
-		envelope.$intee !== RECIPE_VERSION ||
+		envelope.$nativeI18n !== RECIPE_VERSION ||
 		envelope.version !== RECIPE_VERSION
 	)
-		throw new InteeSerializationError(
-			"Unsupported Intee recipe version: " + String(envelope.version)
+		throw new NativeI18nSerializationError(
+			"Unsupported Native I18n recipe version: " + String(envelope.version)
 		)
 	if (typeof envelope.op !== "string" || !recipeOperations.has(envelope.op))
-		throw new InteeSerializationError(
-			"Unsupported Intee recipe operation: " + String(envelope.op)
+		throw new NativeI18nSerializationError(
+			"Unsupported Native I18n recipe operation: " + String(envelope.op)
 		)
 
 	return value as Recipe
@@ -400,7 +400,7 @@ export const compile = <F extends AnyFunction = AnyFunction>(
 	context: ExecutionContext = defaultContext
 ): StandardFunction<F> => {
 	const parsed = parseRecipe(recipe)
-	if (!parsed) throw new InteeSerializationError("Invalid Intee recipe.")
+	if (!parsed) throw new NativeI18nSerializationError("Invalid Native I18n recipe.")
 	recipe = parsed
 
 	let fn: AnyFunction
@@ -482,13 +482,13 @@ const walk = (
 	}
 	if (typeof value === "function") {
 		if (mode === "materialize" && allowCustomFunctions) return value
-		throw new InteeSerializationError(
-			`Custom function at ${path} is not serializable. Use an Intee standard function.`
+		throw new NativeI18nSerializationError(
+			`Custom function at ${path} is not serializable. Use a Native I18n standard function.`
 		)
 	}
 	if (!Array.isArray(value) && !isPlainObject(value)) return value
 	if (active.has(value))
-		throw new InteeSerializationError(
+		throw new NativeI18nSerializationError(
 			`Circular translation data at ${path}`
 		)
 	active.add(value)
@@ -561,7 +561,7 @@ export const tryDehydrate = <T>(data: T): SnapshotData<T> | undefined => {
 	try {
 		return dehydrate(data)
 	} catch (error) {
-		if (error instanceof InteeSerializationError) return undefined
+		if (error instanceof NativeI18nSerializationError) return undefined
 		throw error
 	}
 }

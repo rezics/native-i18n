@@ -8,8 +8,8 @@ import {
 	type StandardFunction
 } from "./standard"
 
-const valueSymbol: unique symbol = Symbol("@nmnmcc/intee/value")
-const unusedSymbol: unique symbol = Symbol("@nmnmcc/intee/unused")
+const valueSymbol: unique symbol = Symbol("native-i18n/value")
+const unusedSymbol: unique symbol = Symbol("native-i18n/unused")
 
 export type ValueMarker<T> = {readonly [valueSymbol]: T}
 export type UnusedMarker<M> = {readonly [unusedSymbol]: M}
@@ -106,7 +106,7 @@ const toFieldRecipe = (input: MaybeUnused): FieldRecipe => {
 	const recipe = describe(field)
 	if (recipe) return {kind: "format", recipe}
 	throw new TypeError(
-		"An insert field must be a constructor, value(), or Intee standard formatter."
+		"An insert field must be a constructor, value(), or Native I18n standard formatter."
 	)
 }
 
@@ -118,9 +118,9 @@ const toFieldRecipes = (fields: Readonly<Record<string, MaybeUnused>>) =>
 		])
 	)
 
-const recipe = <R extends Omit<Recipe, "$intee" | "version">>(input: R) =>
+const recipe = <R extends Omit<Recipe, "$nativeI18n" | "version">>(input: R) =>
 	({
-		$intee: RECIPE_VERSION,
+		$nativeI18n: RECIPE_VERSION,
 		version: RECIPE_VERSION,
 		...input
 	}) as unknown as Recipe

@@ -1,9 +1,9 @@
-import {insert, plural} from "@nmnmcc/intee"
+import {insert, plural} from "native-i18n"
 
 export default {
 	greeting: "Hello!",
 	farewell: "Goodbye!",
-	description: "This is a native TypeScript i18n example using IntEE.",
+	description: "This is a native TypeScript i18n example using Native I18n.",
 	items: {apple: "Apple", banana: "Banana", cherry: "Cherry"},
 	welcome: insert("Welcome, {{name}}!", {name: String}),
 	itemCount: plural({one: "You have # item.", other: "You have # items."})

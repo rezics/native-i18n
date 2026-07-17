@@ -1,6 +1,6 @@
 export {
 	RECIPE_VERSION,
-	InteeSerializationError,
+	NativeI18nSerializationError,
 	compile,
 	dehydrate,
 	describe,

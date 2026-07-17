@@ -1,8 +1,8 @@
-# IntEE
+# Native I18n
 
 Your translations are your types.
 
-IntEE keeps translations as ordinary TypeScript data. Standard i18n operations
+Native I18n keeps translations as ordinary TypeScript data. Standard i18n operations
 are real, strongly typed functions at development time and versioned,
 serializable recipes when they cross a React Server Components boundary.
 
@@ -13,7 +13,7 @@ semantics.
 ## Installation
 
 ```bash
-npm install @nmnmcc/intee
+npm install native-i18n
 ```
 
 React integration requires React 18 or newer. Next.js App Router integration
@@ -22,7 +22,7 @@ requires Next.js 15 or newer.
 ## Quick start
 
 ```ts
-import {create, currency, insert, integer, plural} from "@nmnmcc/intee"
+import {create, currency, insert, integer, plural} from "native-i18n"
 
 const en = {
 	tag: "en-US",
@@ -148,10 +148,10 @@ const data = {
 
 Important semantics:
 
-- percent follows Intl exactly: 0.25 means 25%. IntEE never guesses or divides
+- percent follows Intl exactly: 0.25 means 25%. Native I18n never guesses or divides
   values by 100.
 - relativeTime requires an explicit unit, either when the helper is created or
-  when it is called. IntEE does not approximate months or years.
+  when it is called. Native I18n does not approximate months or years.
 - date/time helpers use the create timeZone. It defaults to UTC for
   deterministic server/client output.
 - duration uses native Intl.DurationFormat. Runtimes without it need a
@@ -186,7 +186,7 @@ requested locale.
 ## React
 
 ```tsx
-import {create} from "@nmnmcc/intee/react"
+import {create} from "native-i18n/react"
 import {languages} from "./languages"
 
 const {useTranslation} = create(languages)
@@ -216,13 +216,13 @@ t("welcome")({name: "Ada"})
 
 ## React Server Components
 
-Ordinary JavaScript closures cannot cross an RSC boundary. IntEE standard
+Ordinary JavaScript closures cannot cross an RSC boundary. Native I18n standard
 functions can, because the server sends recipes and the client rebuilds
 functions with the same locale and time zone.
 
 ```ts
 // i18n/server.ts
-import {create} from "@nmnmcc/intee/react/server"
+import {create} from "native-i18n/react/server"
 import {languages} from "./languages"
 
 export const {getTranslation} = create(languages, {timeZone: "UTC"})
@@ -253,7 +253,7 @@ TranslationProvider hydrates the snapshot once and memoizes it.
 
 ```ts
 // app/i18n/server.ts
-import {create} from "@nmnmcc/intee/next"
+import {create} from "native-i18n/next"
 import {languages} from "./languages"
 
 export const {getLocaleTags, getTranslation} = create(languages)
@@ -263,7 +263,7 @@ export const {getLocaleTags, getTranslation} = create(languages)
 // app/i18n/client.ts
 "use client"
 
-import {create} from "@nmnmcc/intee/next/client"
+import {create} from "native-i18n/next/client"
 import {languages} from "./languages"
 
 export const {TranslationProvider, useLocale, useSetLocale, useTranslation} =
@@ -325,7 +325,7 @@ import {
 	dehydrate,
 	describe,
 	hydrate
-} from "@nmnmcc/intee/ast"
+} from "native-i18n/ast"
 ```
 
 Use these tools for transport, inspection, editor integrations, or persistence.

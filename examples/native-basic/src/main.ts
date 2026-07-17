@@ -1,4 +1,4 @@
-import {create} from "@nmnmcc/intee"
+import {create} from "native-i18n"
 import enUS from "./languages/en-US"
 
 const en = {tag: "en-US", data: enUS} as const

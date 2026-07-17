@@ -15,7 +15,7 @@ export default function App() {
 				margin: "60px auto",
 				padding: "0 16px"
 			}}>
-			<h1>intee React example</h1>
+			<h1>native-i18n React example</h1>
 			<label>
 				{t.switchLocale}{" "}
 				<select
