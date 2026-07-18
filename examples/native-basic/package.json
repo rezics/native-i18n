@@ -3,14 +3,14 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "vite",
-		"build": "tsc --noEmit && vite build"
+		"dev": "yarn workspace native-i18n build && vite",
+		"build": "yarn workspace native-i18n build && tsc --noEmit && vite build"
 	},
 	"devDependencies": {
 		"typescript": "^5.9.3",
 		"vite": "^6.3.5"
 	},
 	"dependencies": {
-		"native-i18n": "link:../.."
+		"native-i18n": "workspace:*"
 	}
 }

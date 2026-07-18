@@ -13,6 +13,10 @@
     "esModuleInterop": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "paths": {
+      "native-i18n": ["../../src/index.ts"],
+      "native-i18n/*": ["../../src/*"]
+    },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
