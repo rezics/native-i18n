@@ -2288,6 +2288,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"kitchen-sink@workspace:examples/kitchen-sink":
+  version: 0.0.0-use.local
+  resolution: "kitchen-sink@workspace:examples/kitchen-sink"
+  dependencies:
+    "@types/react": "npm:19"
+    "@types/react-dom": "npm:19"
+    "@vitejs/plugin-react": "npm:^4.4.1"
+    native-i18n: "workspace:*"
+    react: "npm:^19.2.7"
+    react-dom: "npm:^19.2.7"
+    typescript: "npm:^5.9.3"
+    vite: "npm:^6.3.5"
+  languageName: unknown
+  linkType: soft
+
 "loupe@npm:^3.1.0, loupe@npm:^3.1.2":
   version: 3.2.1
   resolution: "loupe@npm:3.2.1"

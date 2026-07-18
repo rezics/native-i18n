@@ -1,0 +1,21 @@
+{
+	"name": "kitchen-sink",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "yarn workspace native-i18n build && vite",
+		"build": "yarn workspace native-i18n build && tsc --noEmit && vite build"
+	},
+	"devDependencies": {
+		"@types/react": "19",
+		"@types/react-dom": "19",
+		"@vitejs/plugin-react": "^4.4.1",
+		"typescript": "^5.9.3",
+		"vite": "^6.3.5"
+	},
+	"dependencies": {
+		"native-i18n": "workspace:*",
+		"react": "^19.2.7",
+		"react-dom": "^19.2.7"
+	}
+}
