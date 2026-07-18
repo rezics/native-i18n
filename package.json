@@ -93,7 +93,8 @@
 	"scripts": {
 		"build": "tsdown",
 		"prepublishOnly": "yarn build",
-		"test": "vitest run"
+		"test": "vitest run",
+		"test:types": "tsc -p tsconfig.type-tests.json"
 	},
 	"devDependencies": {
 		"@types/react": "^19.2.14",
