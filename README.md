@@ -339,7 +339,32 @@ dehydration rejects custom functions and circular translation data.
 
 ## Examples
 
-Runnable native, React, and Next.js examples are in the examples directory.
+Examples are runnable consumer smoke tests, while `tests/conformance` owns
+precise semantic assertions. Each example has one explicit responsibility:
+
+| Example        | What it verifies                                                                                                                                                                                                                              |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `native-basic` | Framework-free `create`/`match`, synchronous fallback data, lazy locale modules, nested data, `insert`, and `plural`.                                                                                                                         |
+| `react-basic`  | `useTranslation`, browser locale detection, an explicit locale override, lazy client loading, object access, and typed leaf-path access.                                                                                                      |
+| `next-basic`   | App Router request locale resolution, RSC-safe snapshots, Provider hydration, Suspense, cookie-backed `useSetLocale`, and localized server/404 rendering.                                                                                     |
+| `kitchen-sink` | The complete standard message and Intl surface: interpolation, exact/cardinal plural, ordinal, select, range, offset, nested composition, `unused`, raw React values, every formatter, locale switching, and deterministic time-zone binding. |
+
+The `*-basic` examples stay intentionally small for onboarding. `kitchen-sink`
+is the comprehensive reference for checking how the full API behaves together.
+
+## Verification
+
+```bash
+yarn test          # runtime unit, integration, and conformance tests
+yarn test:types    # TypeScript authoring contracts and negative cases
+yarn test:examples # package build plus every example consumer build
+yarn verify        # all of the above
+```
+
+`yarn test` never treats rendered example text as a semantic oracle. Conversely,
+`yarn test:examples` verifies that the public package entries can be consumed by
+plain Vite, React + Vite, and Next.js applications. Publishing runs the complete
+`yarn verify` gate.
 
 ## License
 

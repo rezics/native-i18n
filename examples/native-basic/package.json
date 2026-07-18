@@ -4,7 +4,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "yarn workspace native-i18n build && vite",
-		"build": "yarn workspace native-i18n build && tsc --noEmit && vite build"
+		"build": "yarn workspace native-i18n build && yarn build:example",
+		"build:example": "tsc --noEmit && vite build"
 	},
 	"devDependencies": {
 		"typescript": "^5.9.3",

@@ -92,9 +92,11 @@
 	],
 	"scripts": {
 		"build": "tsdown",
-		"prepublishOnly": "yarn build",
+		"prepublishOnly": "yarn verify",
 		"test": "vitest run",
-		"test:types": "tsc -p tsconfig.type-tests.json"
+		"test:types": "tsc -p tsconfig.type-tests.json",
+		"test:examples": "yarn build && yarn workspace native-basic build:example && yarn workspace react-basic build:example && yarn workspace next-basic build:example && yarn workspace kitchen-sink build:example",
+		"verify": "yarn test && yarn test:types && yarn test:examples"
 	},
 	"devDependencies": {
 		"@types/react": "^19.2.14",
