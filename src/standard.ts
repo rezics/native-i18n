@@ -1,4 +1,6 @@
-export const RECIPE_VERSION = 1 as const
+import {compilePattern, type CompiledPattern} from "./pattern"
+
+export const RECIPE_VERSION = 2 as const
 
 export type AnyFunction = (...arguments_: any[]) => any
 
@@ -12,23 +14,33 @@ export type ConstructorName = "string" | "number" | "boolean" | "date"
 export type FieldRecipe =
 	| {readonly kind: "constructor"; readonly name: ConstructorName}
 	| {readonly kind: "raw"}
-	| {readonly kind: "format"; readonly recipe: Recipe}
+	| {readonly kind: "format"; readonly recipe: FormatRecipe}
 
 type RecipeBase = {
 	readonly $nativeI18n: typeof RECIPE_VERSION
 	readonly version: typeof RECIPE_VERSION
 }
 
+export type LiteralRecipe = RecipeBase & {
+	readonly op: "literal"
+	readonly value: string
+}
+
+export type BindingRecipe =
+	| {readonly kind: "field"; readonly field: FieldRecipe}
+	| {readonly kind: "message"; readonly recipe: MessageRecipe}
+
 export type InsertRecipe = RecipeBase & {
 	readonly op: "insert"
-	readonly template: string
-	readonly fields: Readonly<Record<string, FieldRecipe>>
+	readonly pattern: string
+	readonly bindings: Readonly<Record<string, BindingRecipe>>
 }
 
 export type ChoiceRecipe = RecipeBase & {
 	readonly op: "plural" | "ordinal" | "select"
-	readonly cases: Readonly<Record<string, string>>
-	readonly fields: Readonly<Record<string, FieldRecipe>>
+	readonly cases: Readonly<Record<string, MessageRecipe>>
+	readonly parameters: Readonly<Record<string, FieldRecipe>>
+	readonly value: string
 	readonly offset?: number
 }
 
@@ -37,9 +49,11 @@ export type RangeRecipe = RecipeBase & {
 	readonly cases: readonly {
 		readonly min?: number
 		readonly max?: number
-		readonly value: string
+		readonly value: MessageRecipe
 	}[]
-	readonly other: string
+	readonly other: MessageRecipe
+	readonly parameters: Readonly<Record<string, FieldRecipe>>
+	readonly value: string
 }
 
 export type FormatOperation =
@@ -63,13 +77,40 @@ export type FormatRecipe = RecipeBase & {
 	readonly argument?: string
 }
 
-export type Recipe = InsertRecipe | ChoiceRecipe | RangeRecipe | FormatRecipe
+export type MessageRecipe =
+	| LiteralRecipe
+	| InsertRecipe
+	| ChoiceRecipe
+	| RangeRecipe
+
+export type Recipe = MessageRecipe | FormatRecipe
 
 const recipeSymbol: unique symbol = Symbol("native-i18n/recipe")
 
 export type StandardFunction<F extends AnyFunction = AnyFunction> = F & {
 	readonly [recipeSymbol]: Recipe
 }
+
+declare const messageContractSymbol: unique symbol
+declare const formatterContractSymbol: unique symbol
+
+export type MessageFunction<
+	F extends AnyFunction = AnyFunction,
+	Parameters extends Readonly<Record<string, unknown>> = Readonly<
+		Record<string, unknown>
+	>,
+	Needs extends string = string,
+	Output = ReturnType<F>
+> = StandardFunction<F> & {
+	readonly [messageContractSymbol]: {
+		readonly parameters: Parameters
+		readonly needs: Needs
+		readonly output: Output
+	}
+}
+
+export type FormatterFunction<F extends AnyFunction = AnyFunction> =
+	StandardFunction<F> & {readonly [formatterContractSymbol]: true}
 
 type Atomic =
 	| Date
@@ -131,6 +172,10 @@ export type SnapshotData<T> =
 							: T
 export class NativeI18nSerializationError extends TypeError {
 	override readonly name = "NativeI18nSerializationError"
+}
+
+export class NativeI18nParameterError extends TypeError {
+	override readonly name = "NativeI18nParameterError"
 }
 
 const defaultContext: ExecutionContext = {locale: "en", timeZone: "UTC"}
@@ -212,12 +257,7 @@ export const isStandardFunction = (value: unknown): value is StandardFunction =>
 export const describe = (value: unknown): Recipe | undefined =>
 	isStandardFunction(value) ? value[recipeSymbol] : undefined
 
-const recipeOperations = new Set<string>([
-	"insert",
-	"plural",
-	"ordinal",
-	"select",
-	"range",
+const formatOperations = new Set<string>([
 	"number",
 	"integer",
 	"currency",
@@ -233,6 +273,19 @@ const recipeOperations = new Set<string>([
 	"displayName"
 ])
 
+const recipeOperations = new Set<string>([
+	"literal",
+	"insert",
+	"plural",
+	"ordinal",
+	"select",
+	"range",
+	...formatOperations
+])
+
+export const isMessageRecipe = (recipe: Recipe): recipe is MessageRecipe =>
+	!formatOperations.has(recipe.op)
+
 const parseRecipe = (value: unknown): Recipe | undefined => {
 	if (!value || typeof value !== "object" || !("$nativeI18n" in value))
 		return undefined
@@ -247,7 +300,8 @@ const parseRecipe = (value: unknown): Recipe | undefined => {
 		envelope.version !== RECIPE_VERSION
 	)
 		throw new NativeI18nSerializationError(
-			"Unsupported Native I18n recipe version: " + String(envelope.version)
+			"Unsupported Native I18n recipe version: " +
+				String(envelope.version)
 		)
 	if (typeof envelope.op !== "string" || !recipeOperations.has(envelope.op))
 		throw new NativeI18nSerializationError(
@@ -261,58 +315,6 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 	if (!value || typeof value !== "object") return false
 	const prototype = Object.getPrototypeOf(value) as unknown
 	return prototype === Object.prototype || prototype === null
-}
-
-const fieldValue = (
-	field: FieldRecipe,
-	value: unknown,
-	context: ExecutionContext
-): unknown => {
-	switch (field.kind) {
-		case "raw":
-			return value
-		case "constructor":
-			switch (field.name) {
-				case "string":
-					return String(value)
-				case "number":
-					return String(Number(value))
-				case "boolean":
-					return String(Boolean(value))
-				case "date":
-					return dateFormatter(context, {}).format(
-						value instanceof Date ? value : Number(value)
-					)
-			}
-		case "format":
-			return compile(field.recipe, context)(value)
-	}
-}
-
-const render = (
-	template: string,
-	values: Readonly<Record<string, unknown>>,
-	fields: Readonly<Record<string, FieldRecipe>>,
-	context: ExecutionContext
-) => {
-	const pattern = /{{\s*([\w$.-]+)\s*}}/g
-	const hasRaw = Object.values(fields).some(field => field.kind === "raw")
-	if (!hasRaw)
-		return template.replace(pattern, (_match, name: string) =>
-			String(fieldValue(fields[name]!, values[name], context))
-		)
-
-	const parts: unknown[] = []
-	let index = 0
-	for (const match of template.matchAll(pattern)) {
-		const start = match.index
-		if (start > index) parts.push(template.slice(index, start))
-		const name = match[1]!
-		parts.push(fieldValue(fields[name]!, values[name], context))
-		index = start + match[0].length
-	}
-	if (index < template.length) parts.push(template.slice(index))
-	return parts
 }
 
 const compileFormat = (recipe: FormatRecipe, context: ExecutionContext) => {
@@ -395,73 +397,301 @@ const compileFormat = (recipe: FormatRecipe, context: ExecutionContext) => {
 	}
 }
 
+type MessageScope = {
+	readonly raw: (name: string) => unknown
+	readonly formatted: (name: string) => unknown
+}
+
+type MessageEvaluator = (
+	scope: MessageScope,
+	locals: ReadonlyMap<string, unknown>
+) => unknown
+
+const appendPart = (parts: unknown[], value: unknown): void => {
+	if (Array.isArray(value)) {
+		for (const item of value) appendPart(parts, item)
+		return
+	}
+	if (typeof value === "string" && typeof parts.at(-1) === "string") {
+		parts[parts.length - 1] = String(parts.at(-1)) + value
+		return
+	}
+	parts.push(value)
+}
+
+const renderPattern = (
+	pattern: CompiledPattern,
+	resolve: (name: string) => unknown
+): string | readonly unknown[] => {
+	const parts: unknown[] = []
+	for (const token of pattern.tokens)
+		appendPart(
+			parts,
+			token.kind === "text" ? token.value : resolve(token.name)
+		)
+	return parts.every(part => typeof part === "string")
+		? parts.join("")
+		: parts
+}
+
+const compileMessage = (
+	root: MessageRecipe,
+	context: ExecutionContext
+): AnyFunction => {
+	const parameters = new Map<string, FieldRecipe>()
+	const patterns = new Map<InsertRecipe, CompiledPattern>()
+	const visited = new Set<MessageRecipe>()
+	const active = new Set<MessageRecipe>()
+
+	const addParameter = (name: string, field: FieldRecipe) => {
+		const previous = parameters.get(name)
+		if (previous && stableKey(previous) !== stableKey(field))
+			throw new NativeI18nParameterError(
+				`Conflicting parameter contracts for ${JSON.stringify(name)}.`
+			)
+		parameters.set(name, previous ?? field)
+	}
+
+	const collect = (message: MessageRecipe): void => {
+		if (visited.has(message)) return
+		if (active.has(message))
+			throw new NativeI18nSerializationError(
+				"Circular Native I18n message recipe."
+			)
+		active.add(message)
+		switch (message.op) {
+			case "literal":
+				break
+			case "insert":
+				patterns.set(message, compilePattern(message.pattern))
+				for (const [name, binding] of Object.entries(
+					message.bindings
+				)) {
+					if (binding.kind === "field")
+						addParameter(name, binding.field)
+					else collect(binding.recipe)
+				}
+				break
+			case "plural":
+			case "ordinal":
+			case "select":
+				for (const [name, field] of Object.entries(message.parameters))
+					addParameter(name, field)
+				for (const branch of Object.values(message.cases))
+					collect(branch)
+				break
+			case "range":
+				for (const [name, field] of Object.entries(message.parameters))
+					addParameter(name, field)
+				for (const branch of message.cases) collect(branch.value)
+				collect(message.other)
+				break
+		}
+		active.delete(message)
+		visited.add(message)
+	}
+
+	collect(root)
+
+	const fieldFunctions = new Map<string, (value: unknown) => unknown>()
+	for (const [name, field] of parameters) {
+		switch (field.kind) {
+			case "raw":
+				fieldFunctions.set(name, value => value)
+				break
+			case "constructor":
+				switch (field.name) {
+					case "string":
+						fieldFunctions.set(name, value => String(value))
+						break
+					case "number":
+						fieldFunctions.set(name, value => String(Number(value)))
+						break
+					case "boolean":
+						fieldFunctions.set(name, value =>
+							String(Boolean(value))
+						)
+						break
+					case "date":
+						fieldFunctions.set(name, value =>
+							dateFormatter(context, {}).format(
+								value instanceof Date ? value : Number(value)
+							)
+						)
+						break
+				}
+				break
+			case "format": {
+				const format = compileFormat(
+					field.recipe,
+					context
+				) as AnyFunction
+				fieldFunctions.set(name, value => format(value))
+				break
+			}
+		}
+	}
+
+	const evaluators = new Map<MessageRecipe, MessageEvaluator>()
+	const prepare = (message: MessageRecipe): MessageEvaluator => {
+		const existing = evaluators.get(message)
+		if (existing) return existing
+		let evaluator: MessageEvaluator
+		switch (message.op) {
+			case "literal":
+				evaluator = () => message.value
+				break
+			case "insert": {
+				const pattern = patterns.get(message)!
+				const bindings = Object.fromEntries(
+					Object.entries(message.bindings).map(([name, binding]) => [
+						name,
+						binding.kind === "message"
+							? prepare(binding.recipe)
+							: undefined
+					])
+				) as Readonly<Record<string, MessageEvaluator | undefined>>
+				evaluator = (scope, locals) =>
+					renderPattern(pattern, name => {
+						const child = bindings[name]
+						if (child) return child(scope, locals)
+						if (locals.has(name)) return locals.get(name)
+						return scope.formatted(name)
+					})
+				break
+			}
+			case "plural":
+			case "ordinal": {
+				const branches = Object.fromEntries(
+					Object.entries(message.cases).map(([key, branch]) => [
+						key,
+						prepare(branch)
+					])
+				) as Readonly<Record<string, MessageEvaluator>>
+				evaluator = (scope, locals) => {
+					const raw = Number(scope.raw(message.value))
+					const exact = branches[`=${raw}`]
+					const adjusted = raw - (message.offset ?? 0)
+					const category = pluralRules(
+						context,
+						message.op === "ordinal" ? "ordinal" : "cardinal"
+					).select(adjusted)
+					const branch =
+						exact ?? branches[category] ?? branches["other"]
+					if (!branch)
+						throw new NativeI18nParameterError(
+							`${message.op} requires an other branch.`
+						)
+					const branchLocals = new Map(locals)
+					branchLocals.set(
+						"pluralValue",
+						numberFormatter(context, {}).format(adjusted)
+					)
+					return branch(scope, branchLocals)
+				}
+				break
+			}
+			case "select": {
+				const branches = Object.fromEntries(
+					Object.entries(message.cases).map(([key, branch]) => [
+						key,
+						prepare(branch)
+					])
+				) as Readonly<Record<string, MessageEvaluator>>
+				evaluator = (scope, locals) => {
+					const branch =
+						branches[String(scope.raw(message.value))] ??
+						branches["other"]
+					if (!branch)
+						throw new NativeI18nParameterError(
+							"select requires an other branch."
+						)
+					return branch(scope, locals)
+				}
+				break
+			}
+			case "range": {
+				const branches = message.cases.map(item => ({
+					...item,
+					value: prepare(item.value)
+				}))
+				const other = prepare(message.other)
+				evaluator = (scope, locals) => {
+					const value = Number(scope.raw(message.value))
+					const found = branches.find(
+						item =>
+							(item.min === undefined || value >= item.min) &&
+							(item.max === undefined || value <= item.max)
+					)
+					return (found?.value ?? other)(scope, locals)
+				}
+				break
+			}
+		}
+		evaluators.set(message, evaluator)
+		return evaluator
+	}
+
+	const evaluate = prepare(root)
+	const scalarParameter =
+		root.op === "plural" ||
+		root.op === "ordinal" ||
+		root.op === "select" ||
+		root.op === "range"
+			? root.value
+			: undefined
+
+	return input => {
+		const values = isPlainObject(input)
+			? input
+			: scalarParameter
+				? {[scalarParameter]: input}
+				: {}
+		const formatted = new Map<string, unknown>()
+		const raw = (name: string) => {
+			if (!parameters.has(name))
+				throw new NativeI18nParameterError(
+					`No parameter contract defines ${JSON.stringify(name)}.`
+				)
+			if (!Object.prototype.hasOwnProperty.call(values, name))
+				throw new NativeI18nParameterError(
+					`Missing message parameter ${JSON.stringify(name)}.`
+				)
+			return values[name]
+		}
+		const scope: MessageScope = {
+			raw,
+			formatted: name => {
+				if (formatted.has(name)) return formatted.get(name)
+				const format = fieldFunctions.get(name)
+				if (!format)
+					throw new NativeI18nParameterError(
+						`No parameter contract defines ${JSON.stringify(name)}.`
+					)
+				const value = format(raw(name))
+				formatted.set(name, value)
+				return value
+			}
+		}
+		return evaluate(scope, new Map())
+	}
+}
+
 export const compile = <F extends AnyFunction = AnyFunction>(
 	recipe: Recipe,
 	context: ExecutionContext = defaultContext
 ): StandardFunction<F> => {
 	const parsed = parseRecipe(recipe)
-	if (!parsed) throw new NativeI18nSerializationError("Invalid Native I18n recipe.")
-	recipe = parsed
-
-	let fn: AnyFunction
-	switch (recipe.op) {
-		case "insert":
-			fn = values =>
-				render(recipe.template, values, recipe.fields, context)
-			break
-		case "plural":
-		case "ordinal": {
-			fn = input => {
-				const values =
-					typeof input === "number" ? {count: input} : input
-				const count = Number(values.count)
-				const exact = recipe.cases[`=${count}`]
-				const adjusted = count - (recipe.offset ?? 0)
-				const category = pluralRules(
-					context,
-					recipe.op === "ordinal" ? "ordinal" : "cardinal"
-				).select(adjusted)
-				const template =
-					exact ?? recipe.cases[category] ?? recipe.cases["other"]!
-				const withNumber = template.replace(
-					/#/g,
-					numberFormatter(context, {}).format(adjusted)
-				)
-				return render(withNumber, values, recipe.fields, context)
-			}
-			break
-		}
-		case "select":
-			fn = input => {
-				const values =
-					typeof input === "object" && input !== null
-						? input
-						: {value: input}
-				const template =
-					recipe.cases[String(values.value)] ?? recipe.cases["other"]!
-				return render(template, values, recipe.fields, context)
-			}
-			break
-		case "range":
-			fn = value => {
-				const found = recipe.cases.find(
-					item =>
-						(item.min === undefined || value >= item.min) &&
-						(item.max === undefined || value <= item.max)
-				)
-				return found?.value ?? recipe.other
-			}
-			break
-		default:
-			fn = compileFormat(recipe, context)
-	}
-
-	return defineRecipe(fn as F, recipe)
+	if (!parsed)
+		throw new NativeI18nSerializationError("Invalid Native I18n recipe.")
+	const fn = isMessageRecipe(parsed)
+		? compileMessage(parsed, context)
+		: compileFormat(parsed, context)
+	return defineRecipe(fn as F, parsed)
 }
 
 export const createStandardFunction = <F extends AnyFunction>(recipe: Recipe) =>
 	compile<F>(recipe, defaultContext)
-
 type WalkMode = "materialize" | "dehydrate" | "hydrate"
 
 const walk = (

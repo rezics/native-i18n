@@ -6,5 +6,5 @@ export default {
 	description: "这个页面使用 Native I18n 的 Next.js 辅助函数。",
 	switchLocale: "切换语言：",
 	welcome: insert("欢迎，{{name}}！", {name: String}),
-	itemCount: plural({other: "你有 # 件物品。"})
+	itemCount: plural({other: insert("你有 {{value}} 件物品。")})
 } satisfies typeof import("./en-US").default

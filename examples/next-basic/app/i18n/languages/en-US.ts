@@ -6,5 +6,8 @@ export default {
 	description: "This page uses Native I18n's Next.js helpers.",
 	switchLocale: "Switch locale:",
 	welcome: insert("Welcome, {{name}}!", {name: String}),
-	itemCount: plural({one: "You have # item.", other: "You have # items."})
+	itemCount: plural({
+		one: insert("You have {{value}} item."),
+		other: insert("You have {{value}} items.")
+	})
 }

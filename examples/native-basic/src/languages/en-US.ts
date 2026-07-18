@@ -6,5 +6,8 @@ export default {
 	description: "This is a native TypeScript i18n example using Native I18n.",
 	items: {apple: "Apple", banana: "Banana", cherry: "Cherry"},
 	welcome: insert("Welcome, {{name}}!", {name: String}),
-	itemCount: plural({one: "You have # item.", other: "You have # items."})
+	itemCount: plural({
+		one: insert("You have {{value}} item."),
+		other: insert("You have {{value}} items.")
+	})
 }

@@ -7,5 +7,8 @@ export default {
 	switchLocale: "Switch locale:",
 	items: {apple: "Apple", banana: "Banana", cherry: "Cherry"},
 	welcome: insert("Welcome, {{name}}!", {name: String}),
-	itemCount: plural({one: "You have # item.", other: "You have # items."})
+	itemCount: plural({
+		one: insert("You have {{value}} item."),
+		other: insert("You have {{value}} items.")
+	})
 }

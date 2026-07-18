@@ -2,8 +2,8 @@
 
 Your translations are your types.
 
-Native I18n keeps translations as ordinary TypeScript data. Standard i18n operations
-are real, strongly typed functions at development time and versioned,
+Native I18n keeps translations as ordinary TypeScript data. Standard i18n
+operations are real, strongly typed functions at development time and versioned,
 serializable recipes when they cross a React Server Components boundary.
 
 There is no schema generation, message compiler, or runtime validation
@@ -31,7 +31,10 @@ const en = {
 			name: String,
 			age: integer()
 		}),
-		files: plural({one: "# file", other: "# files"}),
+		files: plural({
+			one: insert("{{value}} file"),
+			other: insert("{{value}} files")
+		}),
 		price: currency("USD")
 	}
 } as const
@@ -55,13 +58,15 @@ an asynchronous loader.
 
 ## Standard message functions
 
-### insert and rich values
+### Pattern and insert
 
-insert extracts placeholders from a string literal and uses the field map as the
-function contract:
+`insert` is the only function that parses Pattern syntax. Pattern is a
+deliberately small, portable subset of Mustache: variable tags and set-delimiter
+tags are supported; sections, partials, comments, dotted names, HTML escaping,
+and unescaped-variable tags are rejected.
 
 ```ts
-const greeting = insert("Hello {{name}}. {{age}}", {
+const greeting = insert("Hello {{name}}. You are {{age}}.", {
 	name: String,
 	age: integer()
 })
@@ -69,56 +74,70 @@ const greeting = insert("Hello {{name}}. {{age}}", {
 greeting({name: "Ada", age: 37})
 ```
 
-Missing placeholders are TypeScript errors:
+A nested `insert` may leave parameter holes. The surrounding message tree
+supplies the contract, so repeated parameter declarations are unnecessary:
 
 ```ts
-insert("Hello {{name}}. {{age}}", {
-	name: String
-	// TypeScript error: age is missing
+const files = plural(
+	{
+		one: insert("{{name}} has one file"),
+		other: insert("{{name}} has {{value}} files")
+	},
+	{name: String}
+)
+
+files({name: "Ada", value: 2})
+```
+
+The plural node declares `name` and its default numeric selector `value`. Both
+are passed through the same argument scope to the selected `insert` branch.
+
+Use `asValue()` to rename a choice node's semantic selector:
+
+```ts
+const files = plural(
+	{
+		one: insert("{{name}} has one file"),
+		other: insert("{{name}} has {{count}} files")
+	},
+	{name: String, count: asValue(number())}
+)
+
+files({name: "Ada", count: 2})
+```
+
+Message nodes can be composed as a tree. A child contributes its input parameter
+contract to its parent; the binding name is an output slot, not an input:
+
+```ts
+const message = insert("{{name}} has {{count}} {{noun}}", {
+	noun: plural(
+		{one: "file", other: "files"},
+		{name: String, count: asValue(number())}
+	)
 })
+
+message({name: "Ada", count: 2})
 ```
 
-Unexpected fields are also errors. When two locales intentionally share a
-function signature but one template does not use a field, mark that decision:
+Plain strings in `plural`, `ordinal`, `select`, and `range` are always literals.
+Wrap a branch with `insert()` when it contains Pattern variables. A bare `#` is
+ordinary text and is never replaced. With plural offset, `value` remains the raw
+selector and the selected branch receives the formatted local `pluralValue`.
 
-```ts
-const japanese = insert("{{age}}歳", {name: unused(String), age: integer()})
-```
-
-Use value<T>() for a ReactNode or another value that must not be converted to a
-string. The result is an array of string/value parts:
+Use `value<T>()` for a ReactNode or another value that must not be converted to
+a string. The result is an array of string/value parts. `rich` remains an alias
+of `insert`.
 
 ```tsx
 const linked = insert("Read {{link}} now", {link: value<React.ReactNode>()})
-
 linked({link: <a href="/docs">the docs</a>})
 ```
 
-rich is an alias of insert for code that wants to make this intent explicit.
-
-### plural, ordinal, select, and range
-
-```ts
-const files = plural({"=0": "No files", "one": "# file", "other": "# files"})
-
-const position = ordinal({one: "#st", two: "#nd", few: "#rd", other: "#th"})
-
-const role = select({admin: "Administrator", other: "Member"})
-
-const size = range(
-	[
-		{max: 0, value: "empty"},
-		{min: 1, max: 9, value: "small"},
-		{min: 10, value: "large"}
-	],
-	"unknown"
-)
-```
-
-plural and ordinal follow Intl.PluralRules and CLDR semantics. Exact =n cases
-win before category selection, other is required, and plural supports offset.
-The # token is formatted with the active locale. Choice templates can use the
-same typed field maps as insert.
+`plural` and `ordinal` use `Intl.PluralRules`; exact `=n` cases win before
+category selection and `other` is required. `select` uses string keys. `range`
+selects the first inclusive `{min, max, value}` branch and also accepts
+recursive message nodes and an optional parameter map.
 
 ## Standard Intl functions
 
@@ -148,8 +167,8 @@ const data = {
 
 Important semantics:
 
-- percent follows Intl exactly: 0.25 means 25%. Native I18n never guesses or divides
-  values by 100.
+- percent follows Intl exactly: 0.25 means 25%. Native I18n never guesses or
+  divides values by 100.
 - relativeTime requires an explicit unit, either when the helper is created or
   when it is called. Native I18n does not approximate months or years.
 - date/time helpers use the create timeZone. It defaults to UTC for

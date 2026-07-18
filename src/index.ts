@@ -11,6 +11,7 @@ import {type DataFunction} from "./translation"
 
 export {parseAcceptLanguage} from "./locale"
 export {
+	asValue,
 	compact,
 	currency,
 	date,
@@ -32,6 +33,7 @@ export {
 	unit,
 	unused,
 	value,
+	type AsValueMarker,
 	type DurationInput,
 	type FieldSpec,
 	type Placeholders,
@@ -45,6 +47,8 @@ export {
 	isStandardFunction,
 	type ContractOf,
 	type ExecutionContext,
+	type FormatterFunction,
+	type MessageFunction,
 	type StandardFunction
 } from "./standard"
 
@@ -188,3 +192,5 @@ export class DataPromise<T extends string, F extends Data> extends Promise<F> {
 		super(executor)
 	}
 }
+
+export {NativeI18nPatternError, type PatternVariables} from "./pattern"
