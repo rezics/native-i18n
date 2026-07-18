@@ -1,5 +1,4 @@
 export {
-	RECIPE_VERSION,
 	NativeI18nParameterError,
 	NativeI18nSerializationError,
 	compile,

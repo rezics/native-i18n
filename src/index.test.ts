@@ -10,7 +10,6 @@ describe("create", () => {
 		const result = match(["zh-CN"])
 
 		expect(result.locale).toEqual({current: "en-US", target: "zh-CN"})
-		expect(result.tag).toBe("zh-CN")
 		expect(result.fallback.greeting).toBe("Hello")
 		expect(await result).toEqual({greeting: "你好"})
 	})

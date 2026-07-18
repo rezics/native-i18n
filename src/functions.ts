@@ -1,6 +1,5 @@
 import {type PatternVariables} from "./pattern"
 import {
-	RECIPE_VERSION,
 	createStandardFunction,
 	describe,
 	isMessageRecipe,
@@ -192,12 +191,8 @@ const toFieldRecipe = (input: MaybeUnused): FieldRecipe => {
 	)
 }
 
-const recipe = <R extends Omit<Recipe, "$nativeI18n" | "version">>(input: R) =>
-	({
-		$nativeI18n: RECIPE_VERSION,
-		version: RECIPE_VERSION,
-		...input
-	}) as unknown as Recipe
+const recipe = <R extends Omit<Recipe, "$nativeI18n">>(input: R) =>
+	({$nativeI18n: 1, ...input}) as unknown as Recipe
 
 const literalRecipe = (value: string): MessageRecipe =>
 	recipe({op: "literal", value}) as MessageRecipe
@@ -243,8 +238,6 @@ export function insert(
 		})
 	) as MessageFunction<AnyFunction, any, any, any>
 }
-
-export const rich: typeof insert = insert
 
 type ChoiceCases = Readonly<Record<string, MessageInput>> & {
 	readonly other: MessageInput

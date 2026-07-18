@@ -72,7 +72,7 @@ export const create = <
 	const D extends Data,
 	const O extends CreateOptions = {}
 >(
-	languages: ValidLanguages<T, D, O>,
+	languages: ValidLanguages<T, D>,
 	options?: O
 ): ClientCreateResult<T, D> => {
 	const match = _create(languages, options)

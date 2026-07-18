@@ -64,7 +64,7 @@ describe("message composition", () => {
 		expect(offset(2)).toBe("1 of 2")
 	})
 
-	test("composes raw rich values through nested message nodes", () => {
+	test("composes raw values through nested message nodes", () => {
 		const node = {type: "strong", text: "Ada"}
 		const selected = select(
 			{

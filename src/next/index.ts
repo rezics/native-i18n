@@ -34,7 +34,7 @@ export const create = <
 	const D extends Data,
 	const O extends NextCreateOptions = {}
 >(
-	languages: ValidLanguages<T, D, O>,
+	languages: ValidLanguages<T, D>,
 	options: O = {} as O
 ): NextCreateResult<T, D, O> => {
 	const match = _create(languages, options)
@@ -72,9 +72,7 @@ export const create = <
 		const base = {...translation, t: toDataFunction(data)}
 		const snapshot = toTranslationSnapshot(translation, result.context)
 
-		return (snapshot
-			? {...base, snapshot}
-			: base) as unknown as ServerTranslationResult<T, D>
+		return {...base, snapshot} as ServerTranslationResult<T, D>
 	}
 
 	return {getTranslation, getLocaleTags, match}

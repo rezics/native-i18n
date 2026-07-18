@@ -1,7 +1,5 @@
 import {compilePattern, type CompiledPattern} from "./pattern"
 
-export const RECIPE_VERSION = 2 as const
-
 export type AnyFunction = (...arguments_: any[]) => any
 
 export type ExecutionContext = {
@@ -16,10 +14,7 @@ export type FieldRecipe =
 	| {readonly kind: "raw"}
 	| {readonly kind: "format"; readonly recipe: FormatRecipe}
 
-type RecipeBase = {
-	readonly $nativeI18n: typeof RECIPE_VERSION
-	readonly version: typeof RECIPE_VERSION
-}
+type RecipeBase = {readonly $nativeI18n: 1}
 
 export type LiteralRecipe = RecipeBase & {
 	readonly op: "literal"
@@ -292,16 +287,11 @@ const parseRecipe = (value: unknown): Recipe | undefined => {
 
 	const envelope = value as {
 		readonly $nativeI18n?: unknown
-		readonly version?: unknown
 		readonly op?: unknown
 	}
-	if (
-		envelope.$nativeI18n !== RECIPE_VERSION ||
-		envelope.version !== RECIPE_VERSION
-	)
+	if (envelope.$nativeI18n !== 1)
 		throw new NativeI18nSerializationError(
-			"Unsupported Native I18n recipe version: " +
-				String(envelope.version)
+			"Invalid Native I18n recipe marker: " + String(envelope.$nativeI18n)
 		)
 	if (typeof envelope.op !== "string" || !recipeOperations.has(envelope.op))
 		throw new NativeI18nSerializationError(
@@ -698,7 +688,6 @@ const walk = (
 	value: unknown,
 	mode: WalkMode,
 	context: ExecutionContext,
-	allowCustomFunctions: boolean,
 	path: string,
 	active: WeakSet<object>
 ): unknown => {
@@ -711,7 +700,6 @@ const walk = (
 		if (recipe) return compile(recipe, context)
 	}
 	if (typeof value === "function") {
-		if (mode === "materialize" && allowCustomFunctions) return value
 		throw new NativeI18nSerializationError(
 			`Custom function at ${path} is not serializable. Use a Native I18n standard function.`
 		)
@@ -724,52 +712,26 @@ const walk = (
 	active.add(value)
 	const result = Array.isArray(value)
 		? value.map((item, index) =>
-				walk(
-					item,
-					mode,
-					context,
-					allowCustomFunctions,
-					`${path}[${index}]`,
-					active
-				)
+				walk(item, mode, context, `${path}[${index}]`, active)
 			)
 		: Object.fromEntries(
 				Object.entries(value).map(([key, item]) => [
 					key,
-					walk(
-						item,
-						mode,
-						context,
-						allowCustomFunctions,
-						`${path}.${key}`,
-						active
-					)
+					walk(item, mode, context, `${path}.${key}`, active)
 				])
 			)
 	active.delete(value)
 	return result
 }
 
-export const materializeData = <T>(
-	data: T,
-	context: ExecutionContext,
-	options: {readonly allowCustomFunctions?: boolean} = {}
-) =>
-	walk(
-		data,
-		"materialize",
-		context,
-		options.allowCustomFunctions ?? false,
-		"data",
-		new WeakSet()
-	) as ContractOf<T>
+export const materializeData = <T>(data: T, context: ExecutionContext) =>
+	walk(data, "materialize", context, "data", new WeakSet()) as ContractOf<T>
 
 export const dehydrate = <T>(data: T): SnapshotData<T> =>
 	walk(
 		data,
 		"dehydrate",
 		defaultContext,
-		false,
 		"data",
 		new WeakSet()
 	) as SnapshotData<T>
@@ -778,23 +740,7 @@ export const hydrate = <T>(
 	data: SnapshotData<T>,
 	context: ExecutionContext
 ): ContractOf<T> =>
-	walk(
-		data,
-		"hydrate",
-		context,
-		false,
-		"data",
-		new WeakSet()
-	) as ContractOf<T>
-
-export const tryDehydrate = <T>(data: T): SnapshotData<T> | undefined => {
-	try {
-		return dehydrate(data)
-	} catch (error) {
-		if (error instanceof NativeI18nSerializationError) return undefined
-		throw error
-	}
-}
+	walk(data, "hydrate", context, "data", new WeakSet()) as ContractOf<T>
 
 export const createIntl = (context: ExecutionContext) => ({
 	numberFormat: (options: Intl.NumberFormatOptions = {}) =>

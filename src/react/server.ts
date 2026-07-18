@@ -9,15 +9,11 @@ import {
 } from ".."
 import {toDataFunction} from "../translation"
 
-export type ServerCreateResult<
-	T extends string,
-	D extends Data,
-	O extends CreateOptions = CreateOptions
-> = {
+export type ServerCreateResult<T extends string, D extends Data> = {
 	readonly getTranslation: (
 		tags: readonly string[]
 	) => Promise<ServerTranslationResult<T, D>>
-	readonly match: ReturnType<typeof _create<T, D, O>>
+	readonly match: ReturnType<typeof _create<T, D>>
 }
 
 export const create = <
@@ -25,9 +21,9 @@ export const create = <
 	const D extends Data,
 	const O extends CreateOptions = {}
 >(
-	languages: ValidLanguages<T, D, O>,
+	languages: ValidLanguages<T, D>,
 	options?: O
-): ServerCreateResult<T, D, O> => {
+): ServerCreateResult<T, D> => {
 	const match = _create(languages, options)
 
 	const getTranslation = async (tags: readonly string[]) => {
@@ -43,9 +39,7 @@ export const create = <
 		const base = {...translation, t: toDataFunction(data)}
 		const snapshot = toTranslationSnapshot(translation, result.context)
 
-		return (snapshot
-			? {...base, snapshot}
-			: base) as unknown as ServerTranslationResult<T, D>
+		return {...base, snapshot} as ServerTranslationResult<T, D>
 	}
 
 	return {getTranslation, match}

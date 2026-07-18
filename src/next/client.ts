@@ -94,7 +94,7 @@ export const create = <
 	const D extends Data,
 	const O extends NextClientCreateOptions = {}
 >(
-	languages: ValidLanguages<T, D, O>,
+	languages: ValidLanguages<T, D>,
 	options?: O
 ): NextResultFor<T, D, O> => {
 	const resolvedOptions = options ?? ({} as O)

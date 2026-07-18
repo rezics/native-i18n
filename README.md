@@ -3,7 +3,7 @@
 Your translations are your types.
 
 Native I18n keeps translations as ordinary TypeScript data. Standard i18n
-operations are real, strongly typed functions at development time and versioned,
+operations are real, strongly typed functions at development time and
 serializable recipes when they cross a React Server Components boundary.
 
 There is no schema generation, message compiler, or runtime validation
@@ -126,8 +126,7 @@ ordinary text and is never replaced. With plural offset, `value` remains the raw
 selector and the selected branch receives the formatted local `pluralValue`.
 
 Use `value<T>()` for a ReactNode or another value that must not be converted to
-a string. The result is an array of string/value parts. `rich` remains an alias
-of `insert`.
+a string. The result is an array of string/value parts.
 
 ```tsx
 const linked = insert("Read {{link}} now", {link: value<React.ReactNode>()})
@@ -312,25 +311,18 @@ With cookieName: false, the client result intentionally omits useSetLocale.
 Next client translation hooks use Suspense so fallback-language content does not
 replace resolved Server Component HTML during hydration.
 
-## Custom functions
+## Translation functions
 
-Unbranded custom functions are forbidden by default, recursively and at both the
-TypeScript and runtime boundaries:
+Unbranded custom functions are forbidden recursively at both the TypeScript and
+runtime boundaries:
 
 ```ts
 create([{tag: "en", data: {message: (name: string) => name}}])
 // TypeScript error
 ```
 
-Legacy/native-only code can opt in:
-
-```ts
-create(languages, {allowCustomFunctions: true})
-```
-
-allowCustomFunctions is marked @deprecated in TypeScript. Custom functions still
-execute, so existing flexibility is not removed, but they cannot produce an RSC
-snapshot. Prefer insert, plural, select, and the Intl helpers.
+Use `insert`, `plural`, `select`, and the Intl helpers for every callable
+translation so data can always produce an RSC snapshot.
 
 ## Optional AST and transport tools
 
@@ -338,18 +330,12 @@ The authoring API is function-first. Recipe tools live in a separate entry
 point:
 
 ```ts
-import {
-	RECIPE_VERSION,
-	compile,
-	dehydrate,
-	describe,
-	hydrate
-} from "native-i18n/ast"
+import {compile, dehydrate, describe, hydrate} from "native-i18n/ast"
 ```
 
 Use these tools for transport, inspection, editor integrations, or persistence.
-Recipes are versioned, unknown versions/operations are rejected, and dehydration
-rejects custom functions and circular translation data.
+The recipe format has a single v1 shape. Unknown operations are rejected, and
+dehydration rejects custom functions and circular translation data.
 
 ## Examples
 
