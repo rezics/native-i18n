@@ -2,25 +2,28 @@ export {
 	NativeI18nParameterError,
 	NativeI18nSerializationError,
 	compile,
-	dehydrate,
 	describe,
 	hydrate,
-	isStandardFunction,
+	isRecipe,
+	materializeData,
+	parseRecipe,
+	validateData,
 	type BindingRecipe,
 	type ChoiceRecipe,
+	type ContractOf,
 	type ExecutionContext,
 	type FieldRecipe,
-	type FormatterFunction,
+	type FormatterNode,
 	type FormatOperation,
 	type FormatRecipe,
 	type InsertRecipe,
 	type LiteralRecipe,
-	type MessageFunction,
+	type MessageNode,
 	type MessageRecipe,
 	type RangeRecipe,
 	type Recipe,
 	type SnapshotData,
-	type StandardFunction
+	type StandardNode
 } from "./standard"
 
 export {

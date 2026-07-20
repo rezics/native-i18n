@@ -1,13 +1,19 @@
 import {createElement} from "react"
-import {renderToReadableStream} from "react-dom/server"
+import {renderToReadableStream, renderToString} from "react-dom/server"
 import {useRouter} from "next/navigation"
 import {afterEach, beforeEach, describe, expect, test, vi} from "vitest"
+import {create as createCore, defineResources} from ".."
 import {create, type NextClientCreateOptions} from "./client"
 
 vi.mock("next/navigation", () => ({useRouter: vi.fn()}))
 
-const en = {tag: "en-US", data: {greeting: "Hello"}}
-const zh = {tag: "zh-Hant", data: async () => ({greeting: "你好"})}
+const resources = defineResources({
+	fallbackLocale: "en-US",
+	loaders: {
+		"en-US": {common: async () => ({greeting: "Hello"})},
+		"zh-Hant": {common: async () => ({greeting: "你好"})}
+	}
+})
 
 describe("next/client", () => {
 	beforeEach(() => {
@@ -20,8 +26,10 @@ describe("next/client", () => {
 
 	test("does not expose a locale setter when cookie persistence is disabled", () => {
 		const options: NextClientCreateOptions = {cookieName: false}
-		const client = create([en, zh], options)
-		const disabled = create([en, zh], {cookieName: false})
+		const client = create<typeof resources, typeof options>(options)
+		const disabled = create<typeof resources, {cookieName: false}>({
+			cookieName: false
+		})
 
 		expect(client).not.toHaveProperty("useSetLocale")
 		expect(
@@ -37,12 +45,12 @@ describe("next/client", () => {
 		>)
 		vi.stubGlobal("document", {cookie: ""})
 		vi.stubGlobal("location", {protocol: "https:"})
-		const {useSetLocale} = create([en, zh])
+		const {useSetLocale} = create<typeof resources>()
 		let setLocale: (locale?: string | null) => void = () => undefined
 
 		const stream = await renderToReadableStream(
 			createElement(function Locale() {
-				setLocale = useSetLocale()
+				setLocale = useSetLocale().setLocale
 				return null
 			})
 		)
@@ -63,12 +71,12 @@ describe("next/client", () => {
 			typeof useRouter
 		>)
 		vi.stubGlobal("document", {cookie: ""})
-		const {useSetLocale} = create([en, zh])
+		const {useSetLocale} = create<typeof resources>()
 		let setLocale: (locale?: string | null) => void = () => undefined
 
 		const stream = await renderToReadableStream(
 			createElement(function Locale() {
-				setLocale = useSetLocale()
+				setLocale = useSetLocale().setLocale
 				return null
 			})
 		)
@@ -88,7 +96,7 @@ describe("next/client", () => {
 		>)
 		vi.stubGlobal("document", {cookie: ""})
 		vi.stubGlobal("location", {protocol: "http:"})
-		const {useSetLocale} = create([en, zh], {
+		const {useSetLocale} = create<typeof resources>({
 			cookieSameSite: "none",
 			cookieSecure: false
 		})
@@ -96,7 +104,7 @@ describe("next/client", () => {
 
 		const stream = await renderToReadableStream(
 			createElement(function Locale() {
-				setLocale = useSetLocale()
+				setLocale = useSetLocale().setLocale
 				return null
 			})
 		)
@@ -110,18 +118,17 @@ describe("next/client", () => {
 		)
 	})
 
-	test("streams the resolved target translation instead of fallback text", async () => {
-		const {TranslationProvider, useTranslation} = create([en, zh])
-
-		const stream = await renderToReadableStream(
+	test("uses a server-seeded namespace without a provider-wide Suspense boundary", async () => {
+		const snapshot = (
+			await createCore(resources).getTranslation("common", ["zh-Hant"])
+		).snapshot
+		const {TranslationProvider, useTranslation} = create<typeof resources>()
+		const html = renderToString(
 			createElement(
 				TranslationProvider,
-				{tags: ["zh-Hant"]},
+				{initial: snapshot},
 				createElement(function Login() {
-					const {t, locale} = useTranslation({
-						suspense: false
-					} as never)
-
+					const {t, locale} = useTranslation("common")
 					return createElement(
 						"p",
 						null,
@@ -130,35 +137,7 @@ describe("next/client", () => {
 				})
 			)
 		)
-		await stream.allReady
-		const html = await new Response(stream).text()
 
 		expect(html).toContain("zh-Hant/zh-Hant:你好")
-		expect(html).not.toContain("en-US/zh-Hant:Hello")
-	})
-
-	test("suspends useLocale until the target language is resolved", async () => {
-		const {TranslationProvider, useLocale} = create([en, zh])
-
-		const stream = await renderToReadableStream(
-			createElement(
-				TranslationProvider,
-				{tags: ["zh-Hant"]},
-				createElement(function Locale() {
-					const locale = useLocale()
-
-					return createElement(
-						"p",
-						null,
-						`${locale.current}/${locale.target}`
-					)
-				})
-			)
-		)
-		await stream.allReady
-		const html = await new Response(stream).text()
-
-		expect(html).toContain("zh-Hant/zh-Hant")
-		expect(html).not.toContain("en-US/zh-Hant")
 	})
 })

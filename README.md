@@ -2,13 +2,14 @@
 
 Your translations are your types.
 
-Native I18n keeps translations as ordinary TypeScript data. Standard i18n
-operations are real, strongly typed functions at development time and
-serializable recipes when they cross a React Server Components boundary.
+Native I18n keeps each translation namespace as ordinary, serializable
+TypeScript data. Locale and namespace loaders are explicit async boundaries;
+TypeScript derives the callable translation contract from the fallback locale.
 
-There is no schema generation, message compiler, or runtime validation
-dependency. TypeScript validates authoring; native Intl implements locale
-semantics.
+There is no schema generation, message compiler, catalog-defined function, or
+runtime validation dependency. Standard message and Intl helpers create pure
+recipe objects, and Native I18n materializes those recipes for the resolved
+locale at runtime.
 
 ## Installation
 
@@ -16,97 +17,148 @@ semantics.
 npm install native-i18n
 ```
 
-React integration requires React 18 or newer. Next.js App Router integration
+React integration requires React 19 or newer. Next.js App Router integration
 requires Next.js 15 or newer.
 
-## Quick start
+## Resources and namespaces
+
+Declare every locale and namespace with a statically analyzable loader:
 
 ```ts
-import {create, currency, insert, integer, plural} from "native-i18n"
+// i18n/resources.ts
+import {defineResources} from "native-i18n"
 
-const en = {
-	tag: "en-US",
-	data: {
-		greeting: insert("Hello {{name}}. You are {{age}}.", {
-			name: String,
-			age: integer()
-		}),
-		files: plural({
-			one: insert("{{value}} file"),
-			other: insert("{{value}} files")
-		}),
-		price: currency("USD")
+export const resources = defineResources({
+	fallbackLocale: "en-US",
+	loaders: {
+		"en-US": {
+			common: () =>
+				import("./messages/en-US/common").then(m => m.default),
+			home: () => import("./messages/en-US/home").then(m => m.default)
+		},
+		"zh-Hant": {
+			common: () =>
+				import("./messages/zh-Hant/common").then(m => m.default),
+			home: () => import("./messages/zh-Hant/home").then(m => m.default)
+		}
 	}
-} as const
+})
+```
 
-const zh = {
-	tag: "zh-Hant",
-	data: () => import("./zh-Hant").then(module => module.default)
-} as const
+Every locale must expose exactly the fallback locale's namespace names. A loader
+may return data synchronously, but dynamic `import()` is recommended for
+translation modules because it gives the bundler an explicit locale × namespace
+loading boundary.
 
-const match = create([en, zh], {timeZone: "UTC"})
-const t = await match(navigator.languages)
+Use the fallback module as the authoring contract for each translation:
 
-t.greeting({name: "Ada", age: 37})
+```ts
+// messages/zh-Hant/home.ts
+import {insert, plural} from "native-i18n"
+
+export default {
+	title: "首頁",
+	welcome: insert("歡迎，{{name}}！", {name: String}),
+	items: plural({other: insert("{{value}} 件物品")})
+} satisfies typeof import("../en-US/home").default
+```
+
+Native I18n owns namespace resolution, loading, deduplication, caching,
+transport, and typing. How an application divides its copy is an application
+decision. A useful default is a small `common` namespace plus route or feature
+namespaces. Avoid turning `common` into the whole application, and avoid tiny
+namespaces that are always requested together.
+
+### Namespace loading is not tree-shaking
+
+These mechanisms solve different problems:
+
+- ESM tree-shaking removes unused library exports from a bundle. Native I18n
+  publishes ESM entry points and declares `sideEffects: false` to support it.
+- Namespace loading keeps translation modules out of the initial execution path
+  until their loader is requested.
+
+Calling `getTranslation("home")` loads the complete selected namespace; it does
+not remove unused keys within that namespace. Each explicit dynamic import is an
+async module boundary, although the final number and names of physical chunks
+remain a bundler decision.
+
+## Core API
+
+```ts
+import {create} from "native-i18n"
+import {resources} from "./i18n/resources"
+
+const i18n = create(resources, {timeZone: "UTC"})
+
+const {t, locale} = await i18n.getTranslation(["common", "home"] as const, [
+	"zh-Hant",
+	"en-US"
+])
+
+t.common.back
+t.home.welcome({name: "Ada"})
+locale.current // "zh-Hant"
+```
+
+A string selection scopes `t` directly to that namespace. An array selection
+returns an object keyed by namespace. Multiple namespaces load concurrently and
+are cached by resolved locale plus namespace. Failed loads are not retained, so
+a later request can retry.
+
+Locale matching uses normalized BCP 47 tags and best-fit matching. It never
+loads an entire fallback catalog eagerly: the fallback locale is metadata and
+uses the same namespace loaders as every other locale.
+
+## Serializable standard recipes
+
+Static translations stay plain values. Standard helpers return serializable
+recipe nodes, not functions:
+
+```ts
+import {currency, insert, plural} from "native-i18n"
+
+export default {
+	title: "Account",
+	welcome: insert("Welcome, {{name}}!", {name: String}),
+	files: plural({one: "one file", other: insert("{{value}} files")}),
+	price: currency("USD")
+}
+```
+
+After loading, Native I18n materializes the same shape with strongly typed
+callables:
+
+```ts
+t.welcome({name: "Ada"})
 t.files(2)
 t.price(12)
 ```
 
-The first language is the synchronous fallback and defines the required shape of
-every other language. Later languages may contain data, a synchronous loader, or
-an asynchronous loader.
-
-## Standard message functions
-
-Keep static translations as plain strings. Use the standard message functions
-only when a translation needs interpolation, selection, plural rules, or other
-runtime formatting:
+Catalog-defined JavaScript functions are deliberately unsupported, recursively:
 
 ```ts
-const data = {
-	title: "Account",
-	welcome: insert("Welcome, {{name}}!", {name: String}),
-	files: plural({one: "one file", other: insert("{{value}} files")})
-}
-```
-
-### Pattern and insert
-
-`insert` is the only function that parses Pattern syntax. Pattern is a
-deliberately small, portable subset of Mustache: variable tags and set-delimiter
-tags are supported; sections, partials, comments, dotted names, HTML escaping,
-and unescaped-variable tags are rejected.
-
-```ts
-const greeting = insert("Hello {{name}}. You are {{age}}.", {
-	name: String,
-	age: integer()
+defineResources({
+	fallbackLocale: "en",
+	loaders: {en: {common: () => ({message: (name: string) => name})}}
 })
-
-greeting({name: "Ada", age: 37})
+// TypeScript error; runtime validation also rejects it.
 ```
 
-A nested `insert` may leave parameter holes. The surrounding message tree
-supplies the contract, so repeated parameter declarations are unnecessary:
+This single pure-data model makes namespaces safe to cache, serialize through
+React Server Components, inspect, persist, and hydrate without executing catalog
+code. It also removes the former distinction between specially branded functions
+and transport recipes.
+
+### Messages
+
+`insert` parses a deliberately small Pattern subset: variable tags and
+set-delimiter tags are supported; sections, partials, comments, dotted names,
+HTML escaping, and unescaped-variable tags are rejected.
 
 ```ts
-const files = plural(
-	{
-		one: insert("{{name}} has one file"),
-		other: insert("{{name}} has {{value}} files")
-	},
-	{name: String}
-)
+import {asValue, insert, number, plural} from "native-i18n"
 
-files({name: "Ada", value: 2})
-```
-
-The plural node declares `name` and its default numeric selector `value`. Both
-are passed through the same argument scope to the selected `insert` branch.
-
-Use `asValue()` to rename a choice node's semantic selector:
-
-```ts
 const files = plural(
 	{
 		one: insert("{{name}} has one file"),
@@ -114,218 +166,167 @@ const files = plural(
 	},
 	{name: String, count: asValue(number())}
 )
-
-files({name: "Ada", count: 2})
 ```
 
-Message nodes can be composed as a tree. A child contributes its input parameter
-contract to its parent; the binding name is an output slot, not an input:
-
-```ts
-const message = insert("{{name}} has {{count}} {{noun}}", {
-	noun: plural(
-		{one: "file", other: "files"},
-		{name: String, count: asValue(number())}
-	)
-})
-
-message({name: "Ada", count: 2})
-```
-
-Plain strings in `plural`, `ordinal`, `select`, and `range` are always literals.
-Wrap a branch with `insert()` when it contains Pattern variables. A bare `#` is
-ordinary text and is never replaced. With plural offset, `value` remains the raw
-selector and the selected branch receives the formatted local `pluralValue`.
-
-Use `value<T>()` for a ReactNode or another value that must not be converted to
-a string. The result is an array of string/value parts.
-
-```tsx
-const linked = insert("Read {{link}} now", {link: value<React.ReactNode>()})
-linked({link: <a href="/docs">the docs</a>})
-```
+Message nodes compose as a tree. Use `insert()` for branch text containing
+Pattern variables, `asValue()` to name a choice selector, `unused()` to retain a
+parameter only for contract parity, and `value<T>()` for values such as
+`ReactNode` that must not be stringified.
 
 `plural` and `ordinal` use `Intl.PluralRules`; exact `=n` cases win before
 category selection and `other` is required. `select` uses string keys. `range`
-selects the first inclusive `{min, max, value}` branch and also accepts
-recursive message nodes and an optional parameter map.
+selects the first inclusive range. A bare `#` has no special meaning.
 
-## Standard Intl functions
+### Intl formatters
 
-All formatters are callable functions and are rebound to the actual loaded
-language by create:
-
-| Area              | Functions                                         |
+| Area              | Helpers                                           |
 | ----------------- | ------------------------------------------------- |
 | Numbers           | number, integer, currency, percent, unit, compact |
 | Date/time         | date, time, datetime                              |
 | Relative/duration | relativeTime, duration                            |
 | Composition       | list, displayName                                 |
 
-Examples:
-
-```ts
-const data = {
-	amount: currency("EUR"),
-	progress: percent(),
-	distance: unit("kilometer"),
-	published: datetime({dateStyle: "medium", timeStyle: "short"}),
-	ago: relativeTime("day", {numeric: "auto"}),
-	names: list({type: "conjunction"}),
-	region: displayName("region")
-}
-```
-
-Important semantics:
-
-- percent follows Intl exactly: 0.25 means 25%. Native I18n never guesses or
-  divides values by 100.
-- relativeTime requires an explicit unit, either when the helper is created or
-  when it is called. Native I18n does not approximate months or years.
-- date/time helpers use the create timeZone. It defaults to UTC for
-  deterministic server/client output.
-- duration uses native Intl.DurationFormat. Runtimes without it need a
-  standards-compliant polyfill before the function is invoked.
-- Formatter instances use a bounded cache; the cache cannot grow without limit
-  across requests.
-
-createIntl({locale, timeZone}) exposes bound native Intl formatter factories for
-advanced cases without adding custom translation functions.
-
-## Matching and locale state
-
-```ts
-const result = match(["zh-Hant"])
-
-result.locale.current // fallback data available immediately
-result.locale.target // best matched target
-result.fallback // materialized fallback translation
-
-const data = await result
-```
-
-Matching uses BCP 47 tags and best-fit matching. Only the selected loader runs.
-DataPromise is a Promise with locale, fallback, tag, and execution context
-available immediately.
-
-The immediate DataPromise locale preserves the fallback/current loading state.
-Completed server and React translations report the actual loaded locale. If a
-client loader fails, current remains the fallback while target preserves the
-requested locale.
+The helpers follow native `Intl` semantics. In particular, `percent()` treats
+`0.25` as 25%, `relativeTime` requires an explicit unit, and date/time helpers
+use the configured time zone (UTC by default) for deterministic server/client
+output. `duration` requires `Intl.DurationFormat` or a standards-compliant
+polyfill.
 
 ## React
 
-```tsx
+For a client-rendered React application, give the client factory the runtime
+resource registry:
+
+```ts
+// i18n.ts
 import {create} from "native-i18n/react"
-import {languages} from "./languages"
+import {resources} from "./resources"
 
-const {useTranslation} = create(languages)
+export const {TranslationProvider, preload, useLocale, useTranslation} =
+	create(resources)
+```
 
+```tsx
 function Page() {
-	const {t, locale} = useTranslation()
+	const {t, locale} = useTranslation("home")
 
-	return (
-		<main lang={locale.current}>
-			<h1>{t.greeting}</h1>
-			<p>{t.welcome({name: "Ada"})}</p>
-		</main>
-	)
+	return <h1 lang={locale.current}>{t.welcome({name: "Ada"})}</h1>
 }
 ```
 
-useTranslation uses navigator.languages by default. Pass a tag list or {tags,
-suspense} to override it. It returns {data, locale, t}. Prefer property access
-for normal application code; it provides the best completion, navigation, and
-rename experience:
+`useTranslation(selection, {tags})` and core/server `getTranslation` are thin
+adapters over the same namespace resolver and return the same `data`, `t`, and
+locale model. They remain separate APIs because one is a React hook and the
+other is asynchronous server/framework code.
+
+When a loader-backed client requests a namespace that is not cached, the hook
+reads its cached Promise with React `use`, activating the nearest Suspense
+boundary. Put that boundary around the smallest UI region that needs lazy
+translations:
+
+```tsx
+<Suspense fallback={<PageSkeleton />}>
+	<Page />
+</Suspense>
+```
+
+There is no `suspense` switch and no provider-wide boundary. Concurrent requests
+for the same locale and namespace share one pending load.
+
+Property access is the primary API. `t` also supports typed string paths when a
+translation key genuinely needs to be passed as data:
 
 ```ts
 t.items.apple
-t.welcome({name: "Ada"})
+t("items.apple")
 ```
-
-`t` also supports typed string paths for cases where a translation key must be
-stored or passed as data, such as configuration or component props. Keep the
-key's literal type instead of widening it to `string`:
-
-```ts
-const itemLabelKey = "items.apple" as const
-t(itemLabelKey)
-
-type TranslationKey = Parameters<typeof t>[0]
-
-function readTranslation(key: TranslationKey) {
-	return t(key)
-}
-```
-
-String-path lookup is a secondary API for these dynamic-key cases, not the
-recommended default access style.
 
 ## React Server Components
 
-Ordinary JavaScript closures cannot cross an RSC boundary. Native I18n standard
-functions can, because the server sends recipes and the client rebuilds
-functions with the same locale and time zone.
+Server code loads only the namespaces it needs and passes the returned snapshot,
+never the materialized server result, to a Client Component:
 
 ```ts
 // i18n/server.ts
 import {create} from "native-i18n/react/server"
-import {languages} from "./languages"
+import {resources} from "./resources"
 
-export const {getTranslation} = create(languages, {timeZone: "UTC"})
+export const {getTranslation} = create(resources)
+```
+
+Use the seeded client entry so no loader registry or core resolver enters the
+client graph:
+
+```ts
+// i18n/client.ts
+"use client"
+
+import {create} from "native-i18n/react/seeded"
+import type {resources} from "./resources"
+
+export const {TranslationProvider, useLocale, useTranslation} =
+	create<typeof resources>()
 ```
 
 ```tsx
-// Server Component
-const translation = await getTranslation(["zh-Hant"])
+const {snapshot} = await getTranslation("common", ["zh-Hant"])
 
-return (
-	<TranslationProvider tags={["zh-Hant"]} initial={translation.snapshot}>
-		{children}
-	</TranslationProvider>
-)
+return <TranslationProvider initial={snapshot}>{children}</TranslationProvider>
 ```
 
-The server result contains:
-
-- data: materialized server functions.
-- t: the server-only translation object with optional typed string-path lookup.
-- locale: current and target locale.
-- snapshot: function-free recipe data for a Client Component.
-
-Pass snapshot, never the complete server result, across the boundary.
-TranslationProvider hydrates the snapshot once and memoizes it.
+Snapshots contain only the selected namespace data and execution context. Nested
+providers share the same locale × namespace cache, so a route can seed
+additional namespaces without resending those already available.
 
 ## Next.js App Router
 
+Keep the loader registry in a server-only module:
+
+```ts
+// app/i18n/resources.ts
+import "server-only"
+
+import {defineResources} from "native-i18n"
+
+export const resources = defineResources({
+	/* explicit loaders */
+})
+```
+
 ```ts
 // app/i18n/server.ts
-import {create} from "native-i18n/next"
-import {languages} from "./languages"
+import {create} from "native-i18n/next/server"
+import {resources} from "./resources"
 
-export const {getLocaleTags, getTranslation} = create(languages)
+export const {getLocaleTags, getTranslation, matchLocale, preload} =
+	create(resources)
 ```
+
+The client imports only its type. No loader or translation module enters the
+client graph:
 
 ```ts
 // app/i18n/client.ts
 "use client"
 
 import {create} from "native-i18n/next/client"
-import {languages} from "./languages"
+import type {resources} from "./resources"
 
 export const {TranslationProvider, useLocale, useSetLocale, useTranslation} =
-	create(languages)
+	create<typeof resources>()
 ```
+
+Seed only client-consumed namespaces. For example, a root layout can provide a
+small `common` namespace while a page reads `home` exclusively on the server:
 
 ```tsx
 // app/layout.tsx
-const tags = await getLocaleTags()
-const {locale, snapshot} = await getTranslation(tags)
+const {locale, snapshot} = await getTranslation("common")
 
 return (
 	<html lang={locale.current}>
 		<body>
-			<TranslationProvider tags={tags} initial={snapshot}>
+			<TranslationProvider initial={snapshot}>
 				{children}
 			</TranslationProvider>
 		</body>
@@ -333,67 +334,57 @@ return (
 )
 ```
 
-getLocaleTags checks NEXT_LOCALE before Accept-Language. Configure cookieName,
-cookieMaxAge, cookiePath, cookieSameSite, and cookieSecure in create options.
-With cookieName: false, the client result intentionally omits useSetLocale.
-
-Next client translation hooks use Suspense so fallback-language content does not
-replace resolved Server Component HTML during hydration.
-
-## Translation functions
-
-Unbranded custom functions are forbidden recursively at both the TypeScript and
-runtime boundaries:
-
-```ts
-create([{tag: "en", data: {message: (name: string) => name}}])
-// TypeScript error
+```tsx
+// app/page.tsx — Server Component
+const {t} = await getTranslation("home")
+return <h1>{t.title}</h1>
 ```
 
-Use `insert`, `plural`, `select`, and the Intl helpers for every callable
-translation so data can always produce an RSC snapshot.
+The seeded Next client path is synchronous and does not enable a separate Native
+I18n Suspense mode. Missing client namespaces are configuration errors. Next
+route loading and streaming boundaries remain responsible for navigation UX.
+`useSetLocale()` writes the locale cookie and performs `router.refresh()` in a
+transition, returning `{isPending, setLocale}`.
 
-## Optional AST and transport tools
+`getLocaleTags()` checks `NEXT_LOCALE` before `Accept-Language`. Set
+`cookieName: false` to disable cookie locale selection and omit `useSetLocale`
+from the client factory result.
 
-The authoring API is function-first. Recipe tools live in a separate entry
-point:
+## AST and transport tools
+
+Low-level pure-data tools live at `native-i18n/ast`:
 
 ```ts
-import {compile, dehydrate, describe, hydrate} from "native-i18n/ast"
+import {compile, describe, hydrate, validateData} from "native-i18n/ast"
 ```
 
-Use these tools for transport, inspection, editor integrations, or persistence.
-The recipe format has a single v1 shape. Unknown operations are rejected, and
-dehydration rejects custom functions and circular translation data.
+- `compile(recipe, context)` materializes one recipe.
+- `hydrate(data, context)` recursively materializes a namespace or snapshot.
+- `validateData(data)` verifies the pure serializable catalog contract.
+- `describe(recipe)` returns a readable representation for tooling.
+
+Unknown recipe operations, custom functions, circular structures, non-finite
+numbers, non-plain objects, and symbol-keyed data are rejected.
 
 ## Examples
 
-Examples are runnable consumer smoke tests, while `tests/conformance` owns
-precise semantic assertions. Each example has one explicit responsibility:
-
-| Example        | What it verifies                                                                                                                                                                                                                              |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `native-basic` | Framework-free `create`/`match`, application-defined `en`/`zh-Hant` tags and canonicalization, synchronous fallback data, lazy locale modules, nested data, `insert`, and `plural`.                                                           |
-| `react-basic`  | `useTranslation`, browser locale detection, an explicit locale override, lazy client loading, and the recommended property-access style.                                                                                                      |
-| `next-basic`   | App Router request locale resolution, RSC-safe snapshots, Provider hydration, Suspense, cookie-backed `useSetLocale`, and localized server/404 rendering.                                                                                     |
-| `kitchen-sink` | The complete standard message and Intl surface: interpolation, exact/cardinal plural, ordinal, select, range, offset, nested composition, `unused`, raw React values, every formatter, locale switching, and deterministic time-zone binding. |
-
-The `*-basic` examples stay intentionally small for onboarding. `kitchen-sink`
-is the comprehensive reference for checking how the full API behaves together.
+| Example        | Focus                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| `native-basic` | Framework-free locale × namespace loading.                                                     |
+| `react-basic`  | Client loaders, localized Suspense, and multi-namespace selection.                             |
+| `next-basic`   | Server-only registry, type-only client setup, selective RSC snapshots, and locale transitions. |
+| `kitchen-sink` | Complete standard message and Intl recipe surface.                                             |
 
 ## Verification
 
 ```bash
-yarn test          # runtime unit, integration, and conformance tests
-yarn test:types    # TypeScript authoring contracts and negative cases
-yarn test:examples # package build plus every example consumer build
+yarn test          # runtime, integration, and conformance tests
+yarn test:types    # authoring contracts and negative TypeScript cases
+yarn test:examples # package build plus every consumer build
 yarn verify        # all of the above
 ```
 
-`yarn test` never treats rendered example text as a semantic oracle. Conversely,
-`yarn test:examples` verifies that the public package entries can be consumed by
-plain Vite, React + Vite, and Next.js applications. Publishing runs the complete
-`yarn verify` gate.
+Publishing runs the complete `yarn verify` gate.
 
 ## License
 

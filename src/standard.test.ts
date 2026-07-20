@@ -1,15 +1,16 @@
 import {describe, expect, test} from "vitest"
-import {create} from "./index"
 import {
 	NativeI18nSerializationError,
-	describe as describeFunction,
-	hydrate
+	compile,
+	describe as describeNode,
+	hydrate,
+	validateData
 } from "./standard"
 import {number} from "./functions"
 
 describe("v1 recipe boundary", () => {
 	test("uses one recipe marker without a separate version field", () => {
-		const recipe = describeFunction(number())
+		const recipe = describeNode(number())
 
 		expect(recipe).toEqual({$nativeI18n: 1, op: "number", options: {}})
 		expect(recipe).not.toHaveProperty("version")
@@ -23,16 +24,22 @@ describe("v1 recipe boundary", () => {
 			})
 		).toThrow(/recipe marker/)
 	})
+
+	test("rejects non-serializable recipe options before execution", () => {
+		expect(() =>
+			compile({
+				$nativeI18n: 1,
+				op: "number",
+				options: {custom: () => undefined}
+			} as never)
+		).toThrow(NativeI18nSerializationError)
+	})
 })
 
 describe("custom function boundary", () => {
 	test("rejects custom translation functions unconditionally", () => {
-		const languages = [
-			{tag: "en", data: {message: (name: string) => name}}
-		] as const
-
-		expect(() => create(languages as never)).toThrow(
-			NativeI18nSerializationError
-		)
+		expect(() =>
+			validateData({message: (name: string) => name} as never)
+		).toThrow(NativeI18nSerializationError)
 	})
 })

@@ -1,46 +1,34 @@
 import {
-	create as _create,
-	toTranslationSnapshot,
+	create as createCore,
+	type AnyResources,
 	type CreateOptions,
-	type Data,
-	type Translation,
-	type ServerTranslationResult,
-	type ValidLanguages
+	type LocaleOf,
+	type NamespaceSelection,
+	type TranslationResult
 } from ".."
-import {toDataFunction} from "../translation"
 
-export type ServerCreateResult<T extends string, D extends Data> = {
-	readonly getTranslation: (
+export type ServerCreateResult<R extends AnyResources> = {
+	readonly getTranslation: <const Selection extends NamespaceSelection<R>>(
+		selection: Selection,
 		tags: readonly string[]
-	) => Promise<ServerTranslationResult<T, D>>
-	readonly match: ReturnType<typeof _create<T, D>>
+	) => Promise<TranslationResult<R, Selection>>
+	readonly matchLocale: (tags: readonly string[]) => LocaleOf<R>
+	readonly preload: <const Selection extends NamespaceSelection<R>>(
+		selection: Selection,
+		tags: readonly string[]
+	) => Promise<void>
 }
 
-export const create = <
-	const T extends string,
-	const D extends Data,
-	const O extends CreateOptions = {}
->(
-	languages: ValidLanguages<T, D>,
-	options?: O
-): ServerCreateResult<T, D> => {
-	const match = _create(languages, options)
+export const create = <const R extends AnyResources>(
+	resources: R,
+	options?: CreateOptions
+): ServerCreateResult<R> => {
+	const core = createCore(resources, options)
 
-	const getTranslation = async (tags: readonly string[]) => {
-		const result = match([...tags])
-		const data = await result
-		const translation: Translation<T, D> = {
-			data,
-			locale: {
-				current: result.context.locale as T,
-				target: result.locale.target
-			}
-		}
-		const base = {...translation, t: toDataFunction(data)}
-		const snapshot = toTranslationSnapshot(translation, result.context)
-
-		return {...base, snapshot} as ServerTranslationResult<T, D>
+	return {
+		getTranslation: (selection, tags) =>
+			core.getTranslation(selection, tags),
+		matchLocale: core.matchLocale,
+		preload: (selection, tags) => core.preload(selection, tags)
 	}
-
-	return {getTranslation, match}
 }

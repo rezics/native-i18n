@@ -1,6 +1,7 @@
 import {describe, expect, test} from "vitest"
 import {
 	asValue,
+	compile,
 	insert,
 	integer,
 	number,
@@ -9,8 +10,13 @@ import {
 	range,
 	select,
 	unused,
-	value
+	value,
+	type ContractOf,
+	type StandardNode
 } from "../../src/index"
+
+const run = <Node extends StandardNode>(node: Node): ContractOf<Node> =>
+	compile(node) as ContractOf<Node>
 
 describe("standard messages", () => {
 	test("formats insert fields and explicit unused fields", () => {
@@ -23,8 +29,10 @@ describe("standard messages", () => {
 			age: integer()
 		})
 
-		expect(english({name: "Ada", age: 37})).toBe("Hello Ada. You are 37.")
-		expect(japanese({name: "Ada", age: 37})).toBe("37歳")
+		expect(run(english)({name: "Ada", age: 37})).toBe(
+			"Hello Ada. You are 37."
+		)
+		expect(run(japanese)({name: "Ada", age: 37})).toBe("37歳")
 	})
 
 	test("preserves raw values as flattened message parts", () => {
@@ -33,7 +41,7 @@ describe("standard messages", () => {
 			badge: value<typeof badge>()
 		})
 
-		expect(message({badge})).toEqual(["User: ", badge, "!"])
+		expect(run(message)({badge})).toEqual(["User: ", badge, "!"])
 	})
 
 	test("implements plural exact, category, offset and localized values", () => {
@@ -48,10 +56,11 @@ describe("standard messages", () => {
 			{offset: 1}
 		)
 
-		expect(files(0)).toBe("No files")
-		expect(files(1)).toBe("1 file")
-		expect(files(1200)).toBe("1,200 files")
-		expect(offset(3)).toBe("2 selected from 3")
+		const formatFiles = run(files)
+		expect(formatFiles(0)).toBe("No files")
+		expect(formatFiles(1)).toBe("1 file")
+		expect(formatFiles(1200)).toBe("1,200 files")
+		expect(run(offset)(3)).toBe("2 selected from 3")
 	})
 
 	test("implements ordinal categories", () => {
@@ -62,12 +71,13 @@ describe("standard messages", () => {
 			other: insert("{{value}}th")
 		})
 
-		expect([position(1), position(2), position(3), position(11)]).toEqual([
-			"1st",
-			"2nd",
-			"3rd",
-			"11th"
-		])
+		const formatPosition = run(position)
+		expect([
+			formatPosition(1),
+			formatPosition(2),
+			formatPosition(3),
+			formatPosition(11)
+		]).toEqual(["1st", "2nd", "3rd", "11th"])
 	})
 
 	test("implements select fallback and inclusive range order", () => {
@@ -81,14 +91,16 @@ describe("standard messages", () => {
 			"unknown"
 		)
 
-		expect(role("admin")).toBe("Administrator")
-		expect(role("guest")).toBe("Member")
-		expect([bucket(0), bucket(4), bucket(9), bucket(12)]).toEqual([
-			"empty",
-			"small",
-			"small",
-			"large"
-		])
+		const formatRole = run(role)
+		const formatBucket = run(bucket)
+		expect(formatRole("admin")).toBe("Administrator")
+		expect(formatRole("guest")).toBe("Member")
+		expect([
+			formatBucket(0),
+			formatBucket(4),
+			formatBucket(9),
+			formatBucket(12)
+		]).toEqual(["empty", "small", "small", "large"])
 	})
 
 	test("composes selectors and message nodes under one parameter scope", () => {
@@ -99,17 +111,17 @@ describe("standard messages", () => {
 			)
 		})
 
-		expect(summary({name: "Ada", count: 2})).toBe("Ada has 2 files")
+		expect(run(summary)({name: "Ada", count: 2})).toBe("Ada has 2 files")
 	})
 
 	test("reports missing contracts, values and required fallback branches", () => {
-		const missingContract = insert("Hello {{name}}") as (
+		const missingContract = run(insert("Hello {{name}}")) as (
 			input: unknown
 		) => string
-		const missingValue = insert("Hello {{name}}", {name: String}) as (
+		const missingValue = run(insert("Hello {{name}}", {name: String})) as (
 			input: unknown
 		) => string
-		const missingOther = plural({one: "one"} as never) as (
+		const missingOther = run(plural({one: "one"} as never)) as (
 			input: number
 		) => string
 

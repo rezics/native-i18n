@@ -1,29 +1,36 @@
 import {describe, expect, test} from "vitest"
-import {insert} from "../functions"
+import {defineResources, insert} from ".."
 import {create} from "./server"
 
-const en = {
-	tag: "en-US",
-	data: {
-		greeting: "Hello",
-		welcome: insert("Hello, {{name}}", {name: String})
+const resources = defineResources({
+	fallbackLocale: "en-US",
+	loaders: {
+		"en-US": {
+			common: async () => ({
+				greeting: "Hello",
+				welcome: insert("Hello, {{name}}", {name: String})
+			})
+		},
+		"zh-Hant": {
+			common: async () => ({
+				greeting: "你好",
+				welcome: insert("你好，{{name}}", {name: String})
+			})
+		}
 	}
-}
-const zh = {
-	tag: "zh-Hant",
-	data: async () => ({
-		greeting: "你好",
-		welcome: insert("你好，{{name}}", {name: String})
-	})
-}
+})
 
 describe("react/server", () => {
-	test("returns a data function and matched tag", async () => {
-		const {getTranslation} = create([en, zh])
-		const {t, locale} = await getTranslation(["zh-Hant"])
+	test("returns a scoped translator and serializable namespace snapshot", async () => {
+		const {getTranslation} = create(resources)
+		const {t, locale, snapshot} = await getTranslation("common", [
+			"zh-Hant"
+		])
 
 		expect(locale).toEqual({current: "zh-Hant", target: "zh-Hant"})
 		expect(t.greeting).toBe("你好")
 		expect(t.welcome({name: "Ada"})).toBe("你好，Ada")
+		expect(snapshot.namespaces).toHaveProperty("common")
+		expect(JSON.stringify(snapshot)).not.toContain("function")
 	})
 })

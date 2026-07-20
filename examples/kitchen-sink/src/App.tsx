@@ -37,7 +37,8 @@ function Section({
 export default function App() {
 	const [selectedLocale, setSelectedLocale] = useState<string>()
 	const {t, locale} = useTranslation(
-		selectedLocale ? [selectedLocale] : undefined
+		"kitchen",
+		selectedLocale ? {tags: [selectedLocale]} : undefined
 	)
 
 	useEffect(() => {

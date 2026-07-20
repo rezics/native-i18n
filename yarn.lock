@@ -2489,7 +2489,7 @@ __metadata:
     vitest: "npm:^2.1.9"
   peerDependencies:
     next: ">=15"
-    react: ">=18"
+    react: ">=19"
   peerDependenciesMeta:
     next:
       optional: true

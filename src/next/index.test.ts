@@ -1,12 +1,18 @@
 import {beforeEach, describe, expect, test, vi} from "vitest"
 import {cookies, headers} from "next/headers"
+import {defineResources} from ".."
 import {create} from "./index"
 
 vi.mock("next/headers", () => ({cookies: vi.fn(), headers: vi.fn()}))
 
-const en = {tag: "en-US", data: {greeting: "Hello"}}
-const zh = {tag: "zh-Hant", data: {greeting: "你好"}}
-const ja = {tag: "ja-JP", data: {greeting: "こんにちは"}}
+const resources = defineResources({
+	fallbackLocale: "en-US",
+	loaders: {
+		"en-US": {common: async () => ({greeting: "Hello"})},
+		"zh-Hant": {common: async () => ({greeting: "你好"})},
+		"ja-JP": {common: async () => ({greeting: "こんにちは"})}
+	}
+})
 
 describe("next", () => {
 	beforeEach(() => {
@@ -23,11 +29,10 @@ describe("next", () => {
 				name === "accept-language" ? "zh-Hant;q=0.9,en-US;q=0.8" : null
 		} as Awaited<ReturnType<typeof headers>>)
 
-		const {getLocaleTags, getTranslation} = create([en, zh, ja])
+		const {getLocaleTags, getTranslation} = create(resources)
 
 		expect(await getLocaleTags()).toEqual(["ja-JP", "zh-Hant", "en-US"])
-
-		const {t, locale} = await getTranslation()
+		const {t, locale} = await getTranslation("common")
 		expect(locale).toEqual({current: "ja-JP", target: "ja-JP"})
 		expect(t.greeting).toBe("こんにちは")
 	})
@@ -38,7 +43,7 @@ describe("next", () => {
 				name === "accept-language" ? "zh-Hant,en-US;q=0.8" : null
 		} as Awaited<ReturnType<typeof headers>>)
 
-		const {getLocaleTags} = create([en, zh, ja], {cookieName: false})
+		const {getLocaleTags} = create(resources, {cookieName: false})
 
 		expect(await getLocaleTags()).toEqual(["zh-Hant", "en-US"])
 		expect(cookies).not.toHaveBeenCalled()
@@ -54,10 +59,9 @@ describe("next", () => {
 				name === "accept-language" ? "zh-Hant,en-US;q=0.8" : null
 		} as Awaited<ReturnType<typeof headers>>)
 
-		const {getLocaleTags, getTranslation} = create([en, zh, ja])
+		const {getTranslation} = create(resources)
 
-		expect(await getLocaleTags()).toEqual(["zh-Hant", "en-US"])
-		expect((await getTranslation()).locale).toEqual({
+		expect((await getTranslation("common")).locale).toEqual({
 			current: "zh-Hant",
 			target: "zh-Hant"
 		})

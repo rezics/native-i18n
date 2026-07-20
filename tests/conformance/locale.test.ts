@@ -1,68 +1,82 @@
 import {describe, expect, test, vi} from "vitest"
-import {create, currency} from "../../src/index"
+import {create, currency, defineResources} from "../../src/index"
 
-describe("locale loading", () => {
-	test("loads only the matched language and exposes fallback state immediately", async () => {
-		const loadGerman = vi.fn(async () => ({price: currency("EUR")}))
-		const loadJapanese = vi.fn(async () => ({price: currency("EUR")}))
-		const match = create([
-			{tag: "en-US", data: {price: currency("EUR")}},
-			{tag: "de-DE", data: loadGerman},
-			{tag: "ja-JP", data: loadJapanese}
-		])
-		const result = match(["de-DE", "ja-JP"])
-
-		expect(result.locale).toEqual({current: "en-US", target: "de-DE"})
-		expect(result.context).toEqual({locale: "de-DE", timeZone: "UTC"})
-		expect(result.fallback.price(12)).toBe(
-			new Intl.NumberFormat("en-US", {
-				style: "currency",
-				currency: "EUR"
-			}).format(12)
+describe("locale and namespace loading", () => {
+	test("loads only the matched locale and requested namespace", async () => {
+		const loadGermanCommon = vi.fn(async () => ({price: currency("EUR")}))
+		const loadGermanCheckout = vi.fn(async () => ({title: "Kasse"}))
+		const loadJapaneseCommon = vi.fn(async () => ({price: currency("EUR")}))
+		const i18n = create(
+			defineResources({
+				fallbackLocale: "en-US",
+				loaders: {
+					"en-US": {
+						common: async () => ({price: currency("EUR")}),
+						checkout: async () => ({title: "Checkout"})
+					},
+					"de-DE": {
+						common: loadGermanCommon,
+						checkout: loadGermanCheckout
+					},
+					"ja-JP": {
+						common: loadJapaneseCommon,
+						checkout: async () => ({title: "購入"})
+					}
+				}
+			})
 		)
 
-		const german = await result
-		expect(german.price(12)).toBe(
+		const result = await i18n.getTranslation("common", ["de-DE", "ja-JP"])
+
+		expect(result.locale).toEqual({current: "de-DE", target: "de-DE"})
+		expect(result.t.price(12)).toBe(
 			new Intl.NumberFormat("de-DE", {
 				style: "currency",
 				currency: "EUR"
 			}).format(12)
 		)
-		expect(loadGerman).toHaveBeenCalledOnce()
-		expect(loadJapanese).not.toHaveBeenCalled()
+		expect(loadGermanCommon).toHaveBeenCalledOnce()
+		expect(loadGermanCheckout).not.toHaveBeenCalled()
+		expect(loadJapaneseCommon).not.toHaveBeenCalled()
 	})
 
-	test("supports data, synchronous loaders and asynchronous loaders", async () => {
-		const match = create([
-			{tag: "en", data: {message: "data"}},
-			{tag: "fr", data: () => ({message: "sync"})},
-			{tag: "de", data: async () => ({message: "async"})}
-		])
-
-		expect((await match(["en"])).message).toBe("data")
-		expect((await match(["fr"])).message).toBe("sync")
-		expect((await match(["de"])).message).toBe("async")
-	})
-
-	test("propagates synchronous and asynchronous loader failures", async () => {
-		const synchronous = create([
-			{tag: "en", data: {message: "fallback"}},
-			{
-				tag: "fr",
-				data: () => {
-					throw new Error("sync failure")
+	test("supports synchronous and asynchronous namespace loaders", async () => {
+		const i18n = create(
+			defineResources({
+				fallbackLocale: "en",
+				loaders: {
+					en: {common: () => ({message: "sync"})},
+					de: {common: async () => ({message: "async"})}
 				}
-			}
-		] as const)
-		const asynchronous = create([
-			{tag: "en", data: {message: "fallback"}},
-			{
-				tag: "de",
-				data: async () => Promise.reject(new Error("async failure"))
-			}
-		] as const)
+			})
+		)
 
-		await expect(synchronous(["fr"])).rejects.toThrow("sync failure")
-		await expect(asynchronous(["de"])).rejects.toThrow("async failure")
+		expect((await i18n.getTranslation("common", ["en"])).t.message).toBe(
+			"sync"
+		)
+		expect((await i18n.getTranslation("common", ["de"])).t.message).toBe(
+			"async"
+		)
+	})
+
+	test("propagates loader failures and retries rejected resources", async () => {
+		const failure = vi
+			.fn<() => Promise<{message: string}>>()
+			.mockRejectedValueOnce(new Error("load failure"))
+			.mockResolvedValue({message: "recovered"})
+		const i18n = create(
+			defineResources({
+				fallbackLocale: "en",
+				loaders: {en: {common: failure}}
+			})
+		)
+
+		await expect(i18n.getTranslation("common", ["en"])).rejects.toThrow(
+			"load failure"
+		)
+		expect((await i18n.getTranslation("common", ["en"])).t.message).toBe(
+			"recovered"
+		)
+		expect(failure).toHaveBeenCalledTimes(2)
 	})
 })

@@ -1,29 +1,15 @@
 "use client"
 
-import {
-	Suspense,
-	createElement,
-	type ReactNode,
-	startTransition,
-	useCallback
-} from "react"
+import {useCallback, useTransition} from "react"
 import {useRouter} from "next/navigation"
 import {
-	create as createReactClient,
-	type ClientCreateResult,
-	type TranslationProviderProps,
-	type UseTranslationOptions
-} from "../react/client"
-import {
-	type CreateOptions,
-	type Data,
-	type Languages,
-	type TranslationResult,
-	type ValidLanguages
-} from ".."
+	createSeededClient,
+	type SeededClientCreateResult
+} from "../react/seeded-client"
+import {type AnyResources} from ".."
 import {normalizeLanguageTag} from "../locale"
 
-export type NextClientCreateOptions = CreateOptions & {
+export type NextClientCreateOptions = {
 	readonly cookieName?: string | false
 	readonly cookieMaxAge?: number
 	readonly cookiePath?: string
@@ -31,138 +17,76 @@ export type NextClientCreateOptions = CreateOptions & {
 	readonly cookieSecure?: boolean
 }
 
-export type NextUseTranslationOptions<T extends string, D extends Data> = Omit<
-	UseTranslationOptions<T, D>,
-	"suspense"
-> & {readonly suspense?: true}
-
-export type NextTranslationProviderProps<
-	T extends string = string,
-	D extends Data = Data
-> = TranslationProviderProps<T, D> & {readonly fallback?: ReactNode}
-
-type NextClientCreateResultBase<T extends string, D extends Data> = Omit<
-	ClientCreateResult<T, D>,
-	"TranslationProvider" | "useTranslation" | "useLocale"
-> & {
-	readonly TranslationProvider: (
-		props: NextTranslationProviderProps<T, D>
-	) => ReactNode
-	readonly useTranslation: (
-		options?: readonly string[] | NextUseTranslationOptions<T, D>
-	) => TranslationResult<T, D>
-	readonly useLocale: ClientCreateResult<T, D>["useLocale"]
+export type LocaleSetter = {
+	readonly isPending: boolean
+	readonly setLocale: (locale?: string | null) => void
 }
 
-type NextClientCreateResultWithSetter<
-	T extends string,
-	D extends Data
-> = NextClientCreateResultBase<T, D> & {
-	readonly useSetLocale: () => (locale?: string | null) => void
-}
+type NextClientCreateResultBase<R extends AnyResources> =
+	SeededClientCreateResult<R>
 
-export type NextClientCreateResult<
-	T extends string,
-	D extends Data
-> = NextClientCreateResultWithSetter<T, D>
+export type NextClientCreateResult<R extends AnyResources> =
+	NextClientCreateResultBase<R> & {readonly useSetLocale: () => LocaleSetter}
 
-export type NextClientCreateResultWithoutLocaleSetter<
-	T extends string,
-	D extends Data
-> = NextClientCreateResultBase<T, D>
+export type NextClientCreateResultWithoutLocaleSetter<R extends AnyResources> =
+	NextClientCreateResultBase<R>
 
 type NextResultFor<
-	T extends string,
-	D extends Data,
+	R extends AnyResources,
 	O extends NextClientCreateOptions
 > = O extends {readonly cookieName: false}
-	? NextClientCreateResultWithoutLocaleSetter<T, D>
+	? NextClientCreateResultWithoutLocaleSetter<R>
 	: "cookieName" extends keyof O
 		? false extends O["cookieName"]
 			?
-					| NextClientCreateResultWithoutLocaleSetter<T, D>
-					| NextClientCreateResult<T, D>
-			: NextClientCreateResult<T, D>
-		: NextClientCreateResult<T, D>
+					| NextClientCreateResultWithoutLocaleSetter<R>
+					| NextClientCreateResult<R>
+			: NextClientCreateResult<R>
+		: NextClientCreateResult<R>
 
 const defaultCookieName = "NEXT_LOCALE"
 const defaultCookieMaxAge = 60 * 60 * 24 * 365
 const defaultCookiePath = "/"
 
 export const create = <
-	const T extends string,
-	const D extends Data,
+	R extends AnyResources,
 	const O extends NextClientCreateOptions = {}
 >(
-	languages: ValidLanguages<T, D>,
-	options?: O
-): NextResultFor<T, D, O> => {
-	const resolvedOptions = options ?? ({} as O)
-	const makeReactClient = createReactClient as unknown as (
-		languages: Languages<T, D>,
-		options?: CreateOptions
-	) => ClientCreateResult<T, D>
-	const react = makeReactClient(languages, resolvedOptions)
-	const cookieName = resolvedOptions.cookieName ?? defaultCookieName
+	options: O = {} as O
+): NextResultFor<R, O> => {
+	const react = createSeededClient<R>()
+	const cookieName = options.cookieName ?? defaultCookieName
+	const base: NextClientCreateResultBase<R> = {
+		TranslationProvider: react.TranslationProvider,
+		useTranslation: react.useTranslation,
+		useLocale: react.useLocale
+	}
 
-	const TranslationProvider: NextClientCreateResultBase<
-		T,
-		D
-	>["TranslationProvider"] = ({children, fallback = null, ...props}) =>
-		createElement(
-			react.TranslationProvider,
-			props,
-			createElement(Suspense, {fallback}, children)
-		)
+	if (cookieName === false) return base as unknown as NextResultFor<R, O>
 
-	const useTranslation = (
-		hookOptions?: readonly string[] | NextUseTranslationOptions<T, D>
-	) =>
-		react.useTranslation(
-			Array.isArray(hookOptions)
-				? {tags: hookOptions, suspense: true}
-				: {...hookOptions, suspense: true}
-		)
-
-	const useLocale: ClientCreateResult<T, D>["useLocale"] = hookOptions =>
-		useTranslation(hookOptions).locale
-
-	const useSetLocale = () => {
+	const useSetLocale = (): LocaleSetter => {
 		const router = useRouter()
-
-		return useCallback(
+		const [isPending, startTransition] = useTransition()
+		const setLocale = useCallback(
 			(locale?: string | null) => {
 				const target = locale ? normalizeLanguageTag(locale) : locale
-
 				if (locale && !target) return
-
-				if (cookieName !== false) {
-					document.cookie = serializeCookie(
-						cookieName,
-						target,
-						resolvedOptions
-					)
+				document.cookie = serializeCookie(cookieName, target, options)
+				if (typeof window === "undefined") {
+					router.refresh()
+					return
 				}
-
-				if (target) void react.preload([target])
 				startTransition(() => {
 					router.refresh()
 				})
 			},
-			[cookieName, react, resolvedOptions, router]
+			[cookieName, options, router, startTransition]
 		)
+
+		return {isPending, setLocale}
 	}
 
-	const result: NextClientCreateResultBase<T, D> = {
-		...react,
-		TranslationProvider,
-		useTranslation,
-		useLocale
-	}
-
-	if (cookieName === false) return result as unknown as NextResultFor<T, D, O>
-
-	return {...result, useSetLocale} as unknown as NextResultFor<T, D, O>
+	return {...base, useSetLocale} as unknown as NextResultFor<R, O>
 }
 
 const serializeCookie = (

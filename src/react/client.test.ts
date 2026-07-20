@@ -1,53 +1,36 @@
 import {createElement} from "react"
 import {renderToReadableStream, renderToString} from "react-dom/server"
-import {describe, expect, test} from "vitest"
-import {create} from "./client"
+import {describe, expect, test, vi} from "vitest"
+import {create as createCore, defineResources} from ".."
+import {create} from "./factory"
 
-const en = {tag: "en-US", data: {greeting: "Hello"}}
-const zh = {tag: "zh-Hant", data: async () => ({greeting: "你好"})}
+const resources = defineResources({
+	fallbackLocale: "en-US",
+	loaders: {
+		"en-US": {
+			common: async () => ({greeting: "Hello"}),
+			checkout: async () => ({title: "Checkout"})
+		},
+		"zh-Hant": {
+			common: async () => ({greeting: "你好"}),
+			checkout: async () => ({title: "結帳"})
+		}
+	}
+})
 
 describe("react/client", () => {
-	test("keeps the hydration snapshot on fallback when initial is absent", async () => {
-		const {TranslationProvider, preload, useTranslation} = create([en, zh])
-
-		await preload(["zh-Hant"])
-
-		const html = renderToString(
-			createElement(
-				TranslationProvider,
-				{tags: ["zh-Hant"]},
-				createElement(function Login() {
-					const {t, locale} = useTranslation()
-
-					return createElement(
-						"p",
-						null,
-						`${locale.current}/${locale.target}:${t.greeting}`
-					)
-				})
-			)
-		)
-
-		expect(html).toContain("en-US/zh-Hant:Hello")
-	})
-
-	test("uses provider initial data for the hydration snapshot", async () => {
-		const {TranslationProvider, useTranslation} = create([en, zh])
+	test("reads a server-seeded namespace without runtime resource loaders", async () => {
+		const snapshot = (
+			await createCore(resources).getTranslation("common", ["zh-Hant"])
+		).snapshot
+		const {TranslationProvider, useTranslation} = create<typeof resources>()
 
 		const html = renderToString(
 			createElement(
 				TranslationProvider,
-				{
-					tags: ["zh-Hant"],
-					initial: {
-						data: {greeting: "你好"},
-						locale: {current: "zh-Hant", target: "zh-Hant"},
-						context: {locale: "zh-Hant", timeZone: "UTC"}
-					}
-				},
+				{initial: snapshot},
 				createElement(function Login() {
-					const {t, locale} = useTranslation()
-
+					const {t, locale} = useTranslation("common")
 					return createElement(
 						"p",
 						null,
@@ -60,47 +43,143 @@ describe("react/client", () => {
 		expect(html).toContain("zh-Hant/zh-Hant:你好")
 	})
 
-	test("keeps server translation stores isolated between renders", async () => {
-		const {TranslationProvider, useTranslation} = create([
-			en,
-			{tag: "zh-Hant", data: async () => ({greeting: "loader-value"})}
+	test("merges namespaces from nested providers without mixing locales", async () => {
+		const core = createCore(resources)
+		const [common, checkout] = await Promise.all([
+			core.getTranslation("common", ["zh-Hant"]),
+			core.getTranslation("checkout", ["zh-Hant"])
 		])
-		const render = async (initial?: {
-			readonly data: {readonly greeting: string}
-			readonly locale: {
-				readonly current: "zh-Hant"
-				readonly target: "zh-Hant"
-			}
-			readonly context: {
-				readonly locale: "zh-Hant"
-				readonly timeZone: "UTC"
-			}
-		}) => {
-			const providerProps = initial
-				? {tags: ["zh-Hant"], initial}
-				: {tags: ["zh-Hant"]}
-			const stream = await renderToReadableStream(
+		const {TranslationProvider, useTranslation} = create<typeof resources>()
+		const html = renderToString(
+			createElement(
+				TranslationProvider,
+				{initial: common.snapshot},
 				createElement(
 					TranslationProvider,
-					providerProps,
-					createElement(function Login() {
-						const {t} = useTranslation({suspense: true})
-
-						return createElement("p", null, t.greeting)
+					{initial: checkout.snapshot},
+					createElement(function Checkout() {
+						const {t} = useTranslation([
+							"common",
+							"checkout"
+						] as const)
+						return createElement(
+							"p",
+							null,
+							`${t.common.greeting}/${t.checkout.title}`
+						)
 					})
 				)
 			)
-			await stream.allReady
-			return new Response(stream).text()
-		}
+		)
 
-		expect(
-			await render({
-				data: {greeting: "request-A-only"},
-				locale: {current: "zh-Hant", target: "zh-Hant"},
-				context: {locale: "zh-Hant", timeZone: "UTC"}
+		expect(html).toContain("你好/結帳")
+	})
+
+	test("keeps nested namespace overrides scoped to their provider", async () => {
+		const common = (
+			await createCore(resources).getTranslation("common", ["en-US"])
+		).snapshot
+		const replacement = {
+			...common,
+			namespaces: {common: {greeting: "Updated"}}
+		} as typeof common
+		const {TranslationProvider, useTranslation} = create<typeof resources>()
+		const Greeting = () => {
+			const {t} = useTranslation("common")
+			return createElement("span", null, t.greeting)
+		}
+		const html = renderToString(
+			createElement(
+				TranslationProvider,
+				{initial: common},
+				createElement(Greeting),
+				createElement(
+					TranslationProvider,
+					{initial: replacement},
+					createElement(Greeting)
+				),
+				createElement(Greeting)
+			)
+		)
+
+		expect(html).toContain("Hello")
+		expect(html).toContain("Updated")
+		expect(html.match(/Hello/g)).toHaveLength(2)
+	})
+
+	test("reports an unseeded namespace without entering Suspense", async () => {
+		const common = (
+			await createCore(resources).getTranslation("common", ["en-US"])
+		).snapshot
+		const {TranslationProvider, useTranslation} = create<typeof resources>()
+
+		expect(() =>
+			renderToString(
+				createElement(
+					TranslationProvider,
+					{initial: common},
+					createElement(function Checkout() {
+						useTranslation("checkout")
+						return null
+					})
+				)
+			)
+		).toThrow(/has not seeded namespace "checkout"/)
+	})
+
+	test("suspends only for a missing namespace when client loaders are enabled", async () => {
+		const loadCommon = vi.fn(async () => ({greeting: "Hello"}))
+		const loadCheckout = vi.fn(async () => ({title: "Checkout"}))
+		const lazyResources = defineResources({
+			fallbackLocale: "en-US",
+			loaders: {"en-US": {common: loadCommon, checkout: loadCheckout}}
+		})
+		const {useTranslation} = create(lazyResources)
+		const stream = await renderToReadableStream(
+			createElement(function Greeting() {
+				const {t} = useTranslation("common")
+				return createElement("p", null, t.greeting)
 			})
-		).toContain("request-A-only")
-		expect(await render()).toContain("loader-value")
+		)
+		await stream.allReady
+		const html = await new Response(stream).text()
+
+		expect(html).toContain("Hello")
+		expect(loadCommon).toHaveBeenCalledOnce()
+		expect(loadCheckout).not.toHaveBeenCalled()
+	})
+
+	test("loads only namespaces missing from a provider seed", async () => {
+		const loadCommon = vi.fn(async () => ({greeting: "Hello"}))
+		const loadCheckout = vi.fn(async () => ({title: "Checkout"}))
+		const lazyResources = defineResources({
+			fallbackLocale: "en-US",
+			loaders: {"en-US": {common: loadCommon, checkout: loadCheckout}}
+		})
+		const snapshot = (
+			await createCore(lazyResources).getTranslation("common", ["en-US"])
+		).snapshot
+		loadCommon.mockClear()
+		const {TranslationProvider, useTranslation} = create(lazyResources)
+		const stream = await renderToReadableStream(
+			createElement(
+				TranslationProvider,
+				{initial: snapshot},
+				createElement(function Checkout() {
+					const {t} = useTranslation(["common", "checkout"] as const)
+					return createElement(
+						"p",
+						null,
+						`${t.common.greeting}/${t.checkout.title}`
+					)
+				})
+			)
+		)
+		await stream.allReady
+		const html = await new Response(stream).text()
+
+		expect(html).toContain("Hello/Checkout")
+		expect(loadCommon).not.toHaveBeenCalled()
+		expect(loadCheckout).toHaveBeenCalledOnce()
 	})
 })

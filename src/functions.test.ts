@@ -1,6 +1,6 @@
 import {describe, expect, expectTypeOf, test} from "vitest"
 import {asValue, insert, number, plural, select, value} from "./functions"
-import {dehydrate, hydrate} from "./standard"
+import {compile, hydrate, validateData, type ContractOf} from "./standard"
 
 describe("message composition", () => {
 	test("declares shared parameters on plural and passes them into insert cases", () => {
@@ -12,11 +12,12 @@ describe("message composition", () => {
 			{name: String}
 		)
 
-		expectTypeOf(files)
+		expectTypeOf<ContractOf<typeof files>>()
 			.parameter(0)
 			.toEqualTypeOf<{name: string; value: number}>()
-		expect(files({name: "Ada", value: 1})).toBe("Ada has one file")
-		expect(files({name: "Ada", value: 2})).toBe("Ada has 2 files")
+		const message = compile<ContractOf<typeof files>>(files)
+		expect(message({name: "Ada", value: 1})).toBe("Ada has one file")
+		expect(message({name: "Ada", value: 2})).toBe("Ada has 2 files")
 	})
 
 	test("renames the semantic selector with asValue", () => {
@@ -28,10 +29,12 @@ describe("message composition", () => {
 			{name: String, count: asValue(number())}
 		)
 
-		expectTypeOf(files)
+		expectTypeOf<ContractOf<typeof files>>()
 			.parameter(0)
 			.toEqualTypeOf<{name: string; count: number}>()
-		expect(files({name: "Ada", count: 3})).toBe("Ada has 3 files")
+		expect(
+			compile<ContractOf<typeof files>>(files)({name: "Ada", count: 3})
+		).toBe("Ada has 3 files")
 	})
 
 	test("lets an inner choice provide the outer insert parameter contract", () => {
@@ -42,16 +45,19 @@ describe("message composition", () => {
 			)
 		})
 
-		expectTypeOf(message)
+		expectTypeOf<ContractOf<typeof message>>()
 			.parameter(0)
 			.toEqualTypeOf<{name: string; count: number}>()
-		expect(message({name: "Ada", count: 1})).toBe("Ada has 1 file")
-		expect(message({name: "Ada", count: 4})).toBe("Ada has 4 files")
+		const compiled = compile<ContractOf<typeof message>>(message)
+		expect(compiled({name: "Ada", count: 1})).toBe("Ada has 1 file")
+		expect(compiled({name: "Ada", count: 4})).toBe("Ada has 4 files")
 	})
 
 	test("treats plain choice branches as literals", () => {
 		const literal = plural({one: "{{value}}", other: "{{value}}"})
-		expect(literal(2)).toBe("{{value}}")
+		expect(compile<ContractOf<typeof literal>>(literal)(2)).toBe(
+			"{{value}}"
+		)
 	})
 
 	test("provides an offset-only pluralValue local without changing raw value", () => {
@@ -61,7 +67,7 @@ describe("message composition", () => {
 			{offset: 1}
 		)
 
-		expect(offset(2)).toBe("1 of 2")
+		expect(compile<ContractOf<typeof offset>>(offset)(2)).toBe("1 of 2")
 	})
 
 	test("composes raw values through nested message nodes", () => {
@@ -73,7 +79,12 @@ describe("message composition", () => {
 			},
 			{role: asValue(String)}
 		)
-		expect(selected({role: "admin", user: node})).toEqual(["User: ", node])
+		expect(
+			compile<ContractOf<typeof selected>>(selected)({
+				role: "admin",
+				user: node
+			})
+		).toEqual(["User: ", node])
 	})
 
 	test("survives recipe dehydration and locale-specific hydration", () => {
@@ -85,7 +96,7 @@ describe("message composition", () => {
 			{name: String}
 		)
 		const data = {message}
-		const snapshot = dehydrate(data)
+		const snapshot = validateData(data)
 		const restored = hydrate<typeof data>(snapshot, {
 			locale: "de-DE",
 			timeZone: "UTC"

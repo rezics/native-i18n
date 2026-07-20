@@ -1,13 +1,12 @@
 import {type PatternVariables} from "./pattern"
 import {
-	createStandardFunction,
 	describe,
 	isMessageRecipe,
 	type AnyFunction,
 	type BindingRecipe,
 	type FieldRecipe,
-	type FormatterFunction,
-	type MessageFunction,
+	type FormatterNode,
+	type MessageNode,
 	type MessageRecipe,
 	type Recipe
 } from "./standard"
@@ -31,7 +30,7 @@ export const asValue = <M extends MessageFieldSpec>(
 	marker: M
 ): AsValueMarker<M> => ({[asValueSymbol]: marker})
 
-type Formatter = FormatterFunction<(value: any, ...rest: any[]) => string>
+type Formatter = FormatterNode<(value: any, ...rest: any[]) => string>
 type Constructor =
 	| StringConstructor
 	| NumberConstructor
@@ -45,7 +44,7 @@ type ParameterSpec =
 	| MaybeUnused<MessageFieldSpec>
 	| AsValueMarker<MessageFieldSpec>
 type ParameterMap = Readonly<Record<string, ParameterSpec>>
-type AnyMessage = MessageFunction<AnyFunction, any, any, any>
+type AnyMessage = MessageNode<AnyFunction, any, any, any>
 type MessageInput = string | AnyMessage
 
 export type Placeholders<S extends string> = PatternVariables<S>
@@ -57,7 +56,7 @@ type UnwrapValue<S> =
 type InputOf<S> =
 	UnwrapValue<S> extends ValueMarker<infer T>
 		? T
-		: UnwrapValue<S> extends FormatterFunction<infer F>
+		: UnwrapValue<S> extends FormatterNode<infer F>
 			? Parameters<F>[0]
 			: UnwrapValue<S> extends StringConstructor
 				? string
@@ -78,11 +77,11 @@ type UnionToIntersection<U> = (
 type IntersectionOrEmpty<U> = [U] extends [never] ? {} : UnionToIntersection<U>
 
 type MessageParameters<M> =
-	M extends MessageFunction<AnyFunction, infer P, any, any> ? P : {}
+	M extends MessageNode<AnyFunction, infer P, any, any> ? P : {}
 type MessageNeeds<M> =
-	M extends MessageFunction<AnyFunction, any, infer N, any> ? N : never
+	M extends MessageNode<AnyFunction, any, infer N, any> ? N : never
 type MessageOutput<M> =
-	M extends MessageFunction<AnyFunction, any, any, infer O> ? O : string
+	M extends MessageNode<AnyFunction, any, any, infer O> ? O : string
 
 type FieldsInput<F extends Readonly<Record<string, unknown>>> = {
 	-readonly [K in keyof F as F[K] extends AnyMessage ? never : K]: InputOf<
@@ -146,7 +145,7 @@ type MessageCall<
 type InsertMessage<
 	S extends string,
 	F extends Readonly<Record<string, MaybeUnused | AnyMessage>>
-> = MessageFunction<
+> = MessageNode<
 	MessageCall<
 		BindingParameters<F>,
 		Exclude<
@@ -224,19 +223,17 @@ export function insert<
 export function insert(
 	pattern: string,
 	bindings: Readonly<Record<string, MaybeUnused | AnyMessage>> = {}
-): MessageFunction<AnyFunction, any, any, any> {
-	return createStandardFunction(
-		recipe({
-			op: "insert",
-			pattern,
-			bindings: Object.fromEntries(
-				Object.entries(bindings).map(([name, binding]) => [
-					name,
-					toBindingRecipe(binding)
-				])
-			)
-		})
-	) as MessageFunction<AnyFunction, any, any, any>
+): MessageNode<AnyFunction, any, any, any> {
+	return recipe({
+		op: "insert",
+		pattern,
+		bindings: Object.fromEntries(
+			Object.entries(bindings).map(([name, binding]) => [
+				name,
+				toBindingRecipe(binding)
+			])
+		)
+	}) as MessageNode<AnyFunction, any, any, any>
 }
 
 type ChoiceCases = Readonly<Record<string, MessageInput>> & {
@@ -294,7 +291,7 @@ type ChoiceMessage<
 	C extends ChoiceCases,
 	F extends ParameterMap,
 	DefaultInput
-> = MessageFunction<
+> = MessageNode<
 	ChoiceCall<
 		ChoiceParameters<C, F, DefaultInput>,
 		Extract<SelectorName<F>, keyof ChoiceParameters<C, F, DefaultInput>>,
@@ -349,20 +346,18 @@ const choice = (
 			? {kind: "constructor", name: "string"}
 			: defaultNumberParameter()
 	)
-	return createStandardFunction(
-		recipe({
-			op,
-			cases: Object.fromEntries(
-				Object.entries(cases).map(([key, branch]) => [
-					key,
-					toMessageRecipe(branch)
-				])
-			),
-			parameters,
-			value: selector,
-			...(offset === undefined ? {} : {offset})
-		})
-	)
+	return recipe({
+		op,
+		cases: Object.fromEntries(
+			Object.entries(cases).map(([key, branch]) => [
+				key,
+				toMessageRecipe(branch)
+			])
+		),
+		parameters,
+		value: selector,
+		...(offset === undefined ? {} : {offset})
+	}) as MessageNode<AnyFunction, any, any, any>
 }
 
 export function plural<const C extends ChoiceCases>(
@@ -378,13 +373,13 @@ export function plural(
 	cases: ChoiceCases,
 	fields?: ParameterMap,
 	options?: PluralOptions
-): MessageFunction<AnyFunction, any, any, any> {
+): MessageNode<AnyFunction, any, any, any> {
 	return choice(
 		"plural",
 		cases,
 		fields ?? {},
 		options?.offset
-	) as MessageFunction<AnyFunction, any, any, any>
+	) as MessageNode<AnyFunction, any, any, any>
 }
 
 export function ordinal<const C extends ChoiceCases>(
@@ -400,13 +395,13 @@ export function ordinal(
 	cases: ChoiceCases,
 	fields?: ParameterMap,
 	options?: PluralOptions
-): MessageFunction<AnyFunction, any, any, any> {
+): MessageNode<AnyFunction, any, any, any> {
 	return choice(
 		"ordinal",
 		cases,
 		fields ?? {},
 		options?.offset
-	) as MessageFunction<AnyFunction, any, any, any>
+	) as MessageNode<AnyFunction, any, any, any>
 }
 
 export function select<const C extends ChoiceCases>(
@@ -420,8 +415,8 @@ export function select<
 export function select(
 	cases: ChoiceCases,
 	fields?: ParameterMap
-): MessageFunction<AnyFunction, any, any, any> {
-	return choice("select", cases, fields ?? {}) as MessageFunction<
+): MessageNode<AnyFunction, any, any, any> {
+	return choice("select", cases, fields ?? {}) as MessageNode<
 		AnyFunction,
 		any,
 		any,
@@ -468,7 +463,7 @@ export const range = <
 	cases: C,
 	other: O,
 	fields?: F
-): MessageFunction<
+): MessageNode<
 	ChoiceCall<
 		RangeParameters<C, O, F>,
 		Extract<SelectorName<F>, keyof RangeParameters<C, O, F>>,
@@ -483,124 +478,113 @@ export const range = <
 		fields ?? {},
 		defaultNumberParameter()
 	)
-	return createStandardFunction(
-		recipe({
-			op: "range",
-			cases: cases.map(item => ({
-				...item,
-				value: toMessageRecipe(item.value)
-			})),
-			other: toMessageRecipe(other),
-			parameters,
-			value: selector
-		})
-	) as never
+	return recipe({
+		op: "range",
+		cases: cases.map(item => ({
+			...item,
+			value: toMessageRecipe(item.value)
+		})),
+		other: toMessageRecipe(other),
+		parameters,
+		value: selector
+	}) as never
 }
 type NumberInput = number | bigint
 type NumberOptions = Intl.NumberFormatOptions
-type NumberFunction = FormatterFunction<(value: NumberInput) => string>
+type NumberNode = FormatterNode<(value: NumberInput) => string>
 
-export const number = (options: NumberOptions = {}): NumberFunction =>
-	createStandardFunction(recipe({op: "number", options}))
+export const number = (options: NumberOptions = {}): NumberNode =>
+	recipe({op: "number", options}) as NumberNode
 
 export const integer = (
 	options: Omit<
 		NumberOptions,
 		"maximumFractionDigits" | "minimumFractionDigits"
 	> = {}
-): NumberFunction =>
-	createStandardFunction(
-		recipe({
-			op: "integer",
-			options: {
-				...options,
-				minimumFractionDigits: 0,
-				maximumFractionDigits: 0
-			}
-		})
-	)
+): NumberNode =>
+	recipe({
+		op: "integer",
+		options: {
+			...options,
+			minimumFractionDigits: 0,
+			maximumFractionDigits: 0
+		}
+	}) as NumberNode
 
 export const currency = (
 	currencyCode: string,
 	options: Omit<NumberOptions, "style" | "currency"> = {}
-): NumberFunction =>
-	createStandardFunction(
-		recipe({
-			op: "currency",
-			argument: currencyCode,
-			options: {style: "currency", currency: currencyCode, ...options}
-		})
-	)
+): NumberNode =>
+	recipe({
+		op: "currency",
+		argument: currencyCode,
+		options: {style: "currency", currency: currencyCode, ...options}
+	}) as NumberNode
 
 export const percent = (
 	options: Omit<NumberOptions, "style"> = {}
-): NumberFunction =>
-	createStandardFunction(
-		recipe({op: "percent", options: {style: "percent", ...options}})
-	)
+): NumberNode =>
+	recipe({
+		op: "percent",
+		options: {style: "percent", ...options}
+	}) as NumberNode
 
 export const unit = (
 	unitName: Intl.NumberFormatOptions["unit"],
 	options: Omit<NumberOptions, "style" | "unit"> = {}
-): NumberFunction =>
-	createStandardFunction(
-		recipe({
-			op: "unit",
-			argument: unitName,
-			options: {style: "unit", unit: unitName, ...options}
-		})
-	)
+): NumberNode =>
+	recipe({
+		op: "unit",
+		argument: unitName,
+		options: {style: "unit", unit: unitName, ...options}
+	}) as NumberNode
 
 export const compact = (
 	options: Omit<NumberOptions, "notation"> = {}
-): NumberFunction =>
-	createStandardFunction(
-		recipe({op: "compact", options: {notation: "compact", ...options}})
-	)
+): NumberNode =>
+	recipe({
+		op: "compact",
+		options: {notation: "compact", ...options}
+	}) as NumberNode
 
 type DateInput = Date | number
-type DateFunction = FormatterFunction<(value: DateInput) => string>
+type DateNode = FormatterNode<(value: DateInput) => string>
 
 export const date = (
 	options: Intl.DateTimeFormatOptions = {dateStyle: "medium"}
-): DateFunction => createStandardFunction(recipe({op: "date", options}))
+): DateNode => recipe({op: "date", options}) as DateNode
 
 export const time = (
 	options: Intl.DateTimeFormatOptions = {timeStyle: "medium"}
-): DateFunction => createStandardFunction(recipe({op: "time", options}))
+): DateNode => recipe({op: "time", options}) as DateNode
 
 export const datetime = (
 	options: Intl.DateTimeFormatOptions = {
 		dateStyle: "medium",
 		timeStyle: "medium"
 	}
-): DateFunction => createStandardFunction(recipe({op: "datetime", options}))
+): DateNode => recipe({op: "datetime", options}) as DateNode
 
 export function relativeTime(
 	unit: Intl.RelativeTimeFormatUnit,
 	options?: Intl.RelativeTimeFormatOptions
-): FormatterFunction<(value: number) => string>
+): FormatterNode<(value: number) => string>
 export function relativeTime(
 	options?: Intl.RelativeTimeFormatOptions
-): FormatterFunction<
-	(value: number, unit: Intl.RelativeTimeFormatUnit) => string
->
+): FormatterNode<(value: number, unit: Intl.RelativeTimeFormatUnit) => string>
 export function relativeTime(
 	unitOrOptions:
 		| Intl.RelativeTimeFormatUnit
 		| Intl.RelativeTimeFormatOptions = {},
 	options: Intl.RelativeTimeFormatOptions = {}
-): FormatterFunction<(...arguments_: any[]) => string> {
+): FormatterNode<(...arguments_: any[]) => string> {
 	const fixedUnit =
 		typeof unitOrOptions === "string" ? unitOrOptions : undefined
-	return createStandardFunction(
-		recipe({
-			op: "relativeTime",
-			options:
-				typeof unitOrOptions === "string" ? options : unitOrOptions,
-			...(fixedUnit === undefined ? {} : {argument: fixedUnit})
-		})
-	)
+	return recipe({
+		op: "relativeTime",
+		options: typeof unitOrOptions === "string" ? options : unitOrOptions,
+		...(fixedUnit === undefined ? {} : {argument: fixedUnit})
+	}) as FormatterNode<(...arguments_: any[]) => string>
 }
 
 export type DurationInput = Readonly<
@@ -623,18 +607,24 @@ export type DurationInput = Readonly<
 
 export const duration = (
 	options: Readonly<Record<string, unknown>> = {}
-): FormatterFunction<(value: DurationInput) => string> =>
-	createStandardFunction(recipe({op: "duration", options}))
+): FormatterNode<(value: DurationInput) => string> =>
+	recipe({op: "duration", options}) as FormatterNode<
+		(value: DurationInput) => string
+	>
 
 export const list = (
 	options: Intl.ListFormatOptions = {}
-): FormatterFunction<(values: Iterable<string>) => string> =>
-	createStandardFunction(recipe({op: "list", options}))
+): FormatterNode<(values: Iterable<string>) => string> =>
+	recipe({op: "list", options}) as FormatterNode<
+		(values: Iterable<string>) => string
+	>
 
 export const displayName = (
 	type: Intl.DisplayNamesType,
 	options: Omit<Intl.DisplayNamesOptions, "type"> = {}
-): FormatterFunction<(code: string) => string> =>
-	createStandardFunction(
-		recipe({op: "displayName", argument: type, options: {type, ...options}})
-	)
+): FormatterNode<(code: string) => string> =>
+	recipe({
+		op: "displayName",
+		argument: type,
+		options: {type, ...options}
+	}) as FormatterNode<(code: string) => string>

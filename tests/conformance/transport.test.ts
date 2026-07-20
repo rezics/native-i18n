@@ -1,6 +1,16 @@
 import {describe, expect, test} from "vitest"
-import {currency, insert, integer, plural} from "../../src/index"
-import {NativeI18nSerializationError, dehydrate, hydrate} from "../../src/ast"
+import {
+	currency,
+	defineResources,
+	insert,
+	integer,
+	plural
+} from "../../src/index"
+import {
+	NativeI18nSerializationError,
+	hydrate,
+	validateData
+} from "../../src/ast"
 import {create as createServer} from "../../src/react/server"
 
 const containsFunction = (value: unknown): boolean => {
@@ -22,7 +32,7 @@ describe("v1 transport", () => {
 				other: insert("{{value}} files")
 			})
 		}
-		const snapshot = dehydrate(source)
+		const snapshot = validateData(source)
 		const transported = JSON.parse(
 			JSON.stringify(snapshot)
 		) as typeof snapshot
@@ -52,32 +62,37 @@ describe("v1 transport", () => {
 
 	test("rejects custom functions and circular translation data with paths", () => {
 		expect(() =>
-			dehydrate({nested: {custom: () => "no"}} as never)
+			validateData({nested: {custom: () => "no"}} as never)
 		).toThrow(/data\.nested\.custom/)
 
 		const circular: {self?: unknown} = {}
 		circular.self = circular
-		expect(() => dehydrate(circular)).toThrow(/data\.self/)
+		expect(() => validateData(circular)).toThrow(/data\.self/)
+
+		const symbolKeyed = {[Symbol("private")]: "value"}
+		expect(() => validateData(symbolKeyed)).toThrow(/symbol-keyed/)
 	})
 
 	test("produces an RSC-safe snapshot that hydrates identically", async () => {
-		const languages = [
-			{
-				tag: "en-US",
-				data: {
-					welcome: insert("Hello {{name}}", {name: String}),
-					price: currency("USD")
+		const resources = defineResources({
+			fallbackLocale: "en-US",
+			loaders: {
+				"en-US": {
+					common: () => ({
+						welcome: insert("Hello {{name}}", {name: String}),
+						price: currency("USD")
+					})
 				}
 			}
-		] as const
-		const result = await createServer(languages, {
+		})
+		const result = await createServer(resources, {
 			timeZone: "UTC"
-		}).getTranslation(["en-US"])
+		}).getTranslation("common", ["en-US"])
 		const transported = JSON.parse(
 			JSON.stringify(result.snapshot)
 		) as typeof result.snapshot
-		const restored = hydrate<(typeof languages)[0]["data"]>(
-			transported.data,
+		const restored = hydrate(
+			transported.namespaces.common,
 			transported.context
 		)
 
@@ -90,7 +105,10 @@ describe("v1 transport", () => {
 	})
 
 	test("uses serialization errors for unsupported transport values", () => {
-		expect(() => dehydrate({message: () => "no"} as never)).toThrow(
+		expect(() => validateData({message: () => "no"} as never)).toThrow(
+			NativeI18nSerializationError
+		)
+		expect(() => validateData({count: Number.NaN})).toThrow(
 			NativeI18nSerializationError
 		)
 	})

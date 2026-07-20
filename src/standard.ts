@@ -80,32 +80,32 @@ export type MessageRecipe =
 
 export type Recipe = MessageRecipe | FormatRecipe
 
-const recipeSymbol: unique symbol = Symbol("native-i18n/recipe")
-
-export type StandardFunction<F extends AnyFunction = AnyFunction> = F & {
-	readonly [recipeSymbol]: Recipe
-}
-
+declare const recipeContractSymbol: unique symbol
 declare const messageContractSymbol: unique symbol
 declare const formatterContractSymbol: unique symbol
 
-export type MessageFunction<
+export type StandardNode<F extends AnyFunction = AnyFunction> = Recipe & {
+	readonly [recipeContractSymbol]: F
+}
+
+export type MessageNode<
 	F extends AnyFunction = AnyFunction,
 	Parameters extends Readonly<Record<string, unknown>> = Readonly<
 		Record<string, unknown>
 	>,
 	Needs extends string = string,
 	Output = ReturnType<F>
-> = StandardFunction<F> & {
-	readonly [messageContractSymbol]: {
-		readonly parameters: Parameters
-		readonly needs: Needs
-		readonly output: Output
+> = MessageRecipe &
+	StandardNode<F> & {
+		readonly [messageContractSymbol]: {
+			readonly parameters: Parameters
+			readonly needs: Needs
+			readonly output: Output
+		}
 	}
-}
 
-export type FormatterFunction<F extends AnyFunction = AnyFunction> =
-	StandardFunction<F> & {readonly [formatterContractSymbol]: true}
+export type FormatterNode<F extends AnyFunction = AnyFunction> = FormatRecipe &
+	StandardNode<F> & {readonly [formatterContractSymbol]: true}
 
 type Atomic =
 	| Date
@@ -120,51 +120,44 @@ type IsAny<T> = 0 extends 1 & T ? true : false
 export type ContractOf<T> =
 	IsAny<T> extends true
 		? T
-		: T extends StandardFunction<infer F>
+		: T extends StandardNode<infer F>
 			? F
-			: T extends AnyFunction | Atomic
-				? T
-				: T extends readonly unknown[]
-					? {[K in keyof T]: ContractOf<T[K]>}
-					: T extends object
-						? {[K in keyof T]: ContractOf<T[K]>}
-						: T
-
-export type HasCustomFunction<T> =
-	IsAny<T> extends true
-		? false
-		: T extends StandardFunction
-			? false
-			: T extends AnyFunction
-				? true
-				: T extends Atomic
-					? false
-					: T extends readonly unknown[]
-						? true extends HasCustomFunction<T[number]>
-							? true
-							: false
-						: T extends object
-							? true extends {
-									[K in keyof T]: HasCustomFunction<T[K]>
-								}[keyof T]
-								? true
-								: false
-							: false
-
-export type SnapshotData<T> =
-	IsAny<T> extends true
-		? T
-		: T extends StandardFunction
-			? Recipe
 			: T extends AnyFunction
 				? never
-				: T extends Atomic
-					? T
-					: T extends readonly unknown[]
-						? {[K in keyof T]: SnapshotData<T[K]>}
-						: T extends object
-							? {[K in keyof T]: SnapshotData<T[K]>}
-							: T
+				: T extends string
+					? string
+					: T extends number
+						? number
+						: T extends boolean
+							? boolean
+							: T extends Atomic
+								? T
+								: T extends readonly unknown[]
+									? {[K in keyof T]: ContractOf<T[K]>}
+									: T extends object
+										? {[K in keyof T]: ContractOf<T[K]>}
+										: T
+
+export type HasFunction<T> =
+	IsAny<T> extends true
+		? false
+		: T extends AnyFunction
+			? true
+			: T extends Atomic
+				? false
+				: T extends readonly unknown[]
+					? true extends HasFunction<T[number]>
+						? true
+						: false
+					: T extends object
+						? true extends {
+								[K in keyof T]: HasFunction<T[K]>
+							}[keyof T]
+							? true
+							: false
+						: false
+
+export type SnapshotData<T> = T
 export class NativeI18nSerializationError extends TypeError {
 	override readonly name = "NativeI18nSerializationError"
 }
@@ -236,22 +229,6 @@ const pluralRules = (context: ExecutionContext, type: Intl.PluralRuleType) =>
 		() => new Intl.PluralRules(context.locale, {type})
 	)
 
-const defineRecipe = <F extends AnyFunction>(fn: F, recipe: Recipe) => {
-	Object.defineProperty(fn, recipeSymbol, {
-		value: recipe,
-		enumerable: false,
-		configurable: false,
-		writable: false
-	})
-	return fn as StandardFunction<F>
-}
-
-export const isStandardFunction = (value: unknown): value is StandardFunction =>
-	typeof value === "function" && recipeSymbol in value
-
-export const describe = (value: unknown): Recipe | undefined =>
-	isStandardFunction(value) ? value[recipeSymbol] : undefined
-
 const formatOperations = new Set<string>([
 	"number",
 	"integer",
@@ -281,7 +258,7 @@ const recipeOperations = new Set<string>([
 export const isMessageRecipe = (recipe: Recipe): recipe is MessageRecipe =>
 	!formatOperations.has(recipe.op)
 
-const parseRecipe = (value: unknown): Recipe | undefined => {
+export const parseRecipe = (value: unknown): Recipe | undefined => {
 	if (!value || typeof value !== "object" || !("$nativeI18n" in value))
 		return undefined
 
@@ -301,10 +278,50 @@ const parseRecipe = (value: unknown): Recipe | undefined => {
 	return value as Recipe
 }
 
+export const isRecipe = (value: unknown): value is Recipe =>
+	parseRecipe(value) !== undefined
+
+export const describe = (value: unknown): Recipe | undefined =>
+	parseRecipe(value)
+
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 	if (!value || typeof value !== "object") return false
 	const prototype = Object.getPrototypeOf(value) as unknown
 	return prototype === Object.prototype || prototype === null
+}
+
+const assertSerializable = (
+	value: unknown,
+	path: string,
+	active: WeakSet<object>
+): void => {
+	if (
+		value === null ||
+		typeof value === "string" ||
+		typeof value === "boolean"
+	)
+		return
+	if (typeof value === "number" && Number.isFinite(value)) return
+	if (typeof value === "function")
+		throw new NativeI18nSerializationError(
+			`Function at ${path} is not valid translation data. Use a Native I18n recipe node.`
+		)
+	if (!Array.isArray(value) && !isPlainObject(value))
+		throw new NativeI18nSerializationError(
+			`Non-serializable value at ${path}. Translation data must contain only finite primitives, arrays, plain objects, and Native I18n recipe nodes.`
+		)
+	if (active.has(value))
+		throw new NativeI18nSerializationError(
+			`Circular translation data at ${path}`
+		)
+	if (Object.getOwnPropertySymbols(value).length > 0)
+		throw new NativeI18nSerializationError(
+			`${path} contains symbol-keyed properties, which are not serializable.`
+		)
+	active.add(value)
+	for (const [key, item] of Object.entries(value))
+		assertSerializable(item, `${path}.${key}`, active)
+	active.delete(value)
 }
 
 const compileFormat = (recipe: FormatRecipe, context: ExecutionContext) => {
@@ -668,56 +685,70 @@ const compileMessage = (
 }
 
 export const compile = <F extends AnyFunction = AnyFunction>(
-	recipe: Recipe,
+	recipe: Recipe | StandardNode<F>,
 	context: ExecutionContext = defaultContext
-): StandardFunction<F> => {
+): F => {
 	const parsed = parseRecipe(recipe)
 	if (!parsed)
 		throw new NativeI18nSerializationError("Invalid Native I18n recipe.")
+	assertSerializable(parsed, "recipe", new WeakSet())
 	const fn = isMessageRecipe(parsed)
 		? compileMessage(parsed, context)
 		: compileFormat(parsed, context)
-	return defineRecipe(fn as F, parsed)
+	return fn as F
 }
-
-export const createStandardFunction = <F extends AnyFunction>(recipe: Recipe) =>
-	compile<F>(recipe, defaultContext)
-type WalkMode = "materialize" | "dehydrate" | "hydrate"
 
 const walk = (
 	value: unknown,
-	mode: WalkMode,
 	context: ExecutionContext,
 	path: string,
-	active: WeakSet<object>
+	active: WeakSet<object>,
+	materialize: boolean
 ): unknown => {
-	if (isStandardFunction(value))
-		return mode === "dehydrate"
-			? value[recipeSymbol]
-			: compile(value[recipeSymbol], context)
-	if (mode === "hydrate") {
-		const recipe = parseRecipe(value)
-		if (recipe) return compile(recipe, context)
+	const recipe = parseRecipe(value)
+	if (recipe) {
+		if (materialize) return compile(recipe, context)
+		assertSerializable(recipe, path, new WeakSet())
+		return value
 	}
 	if (typeof value === "function") {
 		throw new NativeI18nSerializationError(
-			`Custom function at ${path} is not serializable. Use a Native I18n standard function.`
+			`Function at ${path} is not valid translation data. Use a Native I18n recipe node.`
 		)
 	}
-	if (!Array.isArray(value) && !isPlainObject(value)) return value
+	if (
+		value === null ||
+		typeof value === "string" ||
+		typeof value === "boolean"
+	)
+		return value
+	if (typeof value === "number") {
+		if (Number.isFinite(value)) return value
+		throw new NativeI18nSerializationError(
+			`Non-finite number at ${path} is not serializable.`
+		)
+	}
+	if (!Array.isArray(value) && !isPlainObject(value))
+		throw new NativeI18nSerializationError(
+			`Non-serializable value at ${path}. Translation data must contain only primitives, arrays, plain objects, and Native I18n recipe nodes.`
+		)
 	if (active.has(value))
 		throw new NativeI18nSerializationError(
 			`Circular translation data at ${path}`
 		)
+	if (Object.getOwnPropertySymbols(value).length > 0)
+		throw new NativeI18nSerializationError(
+			`${path} contains symbol-keyed properties, which are not serializable.`
+		)
 	active.add(value)
 	const result = Array.isArray(value)
 		? value.map((item, index) =>
-				walk(item, mode, context, `${path}[${index}]`, active)
+				walk(item, context, `${path}[${index}]`, active, materialize)
 			)
 		: Object.fromEntries(
 				Object.entries(value).map(([key, item]) => [
 					key,
-					walk(item, mode, context, `${path}.${key}`, active)
+					walk(item, context, `${path}.${key}`, active, materialize)
 				])
 			)
 	active.delete(value)
@@ -725,22 +756,15 @@ const walk = (
 }
 
 export const materializeData = <T>(data: T, context: ExecutionContext) =>
-	walk(data, "materialize", context, "data", new WeakSet()) as ContractOf<T>
+	walk(data, context, "data", new WeakSet(), true) as ContractOf<T>
 
-export const dehydrate = <T>(data: T): SnapshotData<T> =>
-	walk(
-		data,
-		"dehydrate",
-		defaultContext,
-		"data",
-		new WeakSet()
-	) as SnapshotData<T>
+export const validateData = <T>(data: T): SnapshotData<T> =>
+	walk(data, defaultContext, "data", new WeakSet(), false) as SnapshotData<T>
 
 export const hydrate = <T>(
 	data: SnapshotData<T>,
 	context: ExecutionContext
-): ContractOf<T> =>
-	walk(data, "hydrate", context, "data", new WeakSet()) as ContractOf<T>
+): ContractOf<T> => materializeData(data, context)
 
 export const createIntl = (context: ExecutionContext) => ({
 	numberFormat: (options: Intl.NumberFormatOptions = {}) =>

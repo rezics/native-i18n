@@ -4,7 +4,7 @@ import {getTranslation} from "./i18n/server"
 export const metadata: Metadata = {title: "404"}
 
 export default async function NotFound() {
-	const {t} = await getTranslation()
+	const {t} = await getTranslation("common")
 
 	return (
 		<main

@@ -1,4 +1,5 @@
-import {create} from "native-i18n/next"
-import {languages} from "./languages"
+import {create} from "native-i18n/next/server"
+import {resources} from "./resources"
 
-export const {getLocaleTags, getTranslation, match} = create(languages)
+export const {getLocaleTags, getTranslation, matchLocale, preload} =
+	create(resources)

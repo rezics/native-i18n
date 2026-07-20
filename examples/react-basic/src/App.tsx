@@ -5,7 +5,10 @@ const LOCALES = ["en-US", "zh-Hant", "ja-JP"] as const
 
 export default function App() {
 	const [locale, setLocale] = useState<string | undefined>(undefined)
-	const {t} = useTranslation(locale ? [locale] : undefined)
+	const {t} = useTranslation(
+		["common", "home"],
+		locale ? {tags: [locale]} : undefined
+	)
 
 	return (
 		<div
@@ -17,7 +20,7 @@ export default function App() {
 			}}>
 			<h1>native-i18n React example</h1>
 			<label>
-				{t.switchLocale}{" "}
+				{t.common.switchLocale}{" "}
 				<select
 					value={locale ?? ""}
 					onChange={e => setLocale(e.target.value || undefined)}>
@@ -37,14 +40,15 @@ export default function App() {
 					marginTop: 16
 				}}>
 				<p>
-					<strong>{t.greeting}</strong>
+					<strong>{t.home.greeting}</strong>
 				</p>
-				<p>{t.description}</p>
-				<p>{t.welcome({name: "Alice"})}</p>
-				<p>{t.itemCount(3)}</p>
-				<p>{t.farewell}</p>
+				<p>{t.home.description}</p>
+				<p>{t.home.welcome({name: "Alice"})}</p>
+				<p>{t.home.itemCount(3)}</p>
+				<p>{t.common.farewell}</p>
 				<p>
-					Items: {t.items.apple}, {t.items.banana}, {t.items.cherry}
+					Items: {t.common.items.apple}, {t.common.items.banana},{" "}
+					{t.common.items.cherry}
 				</p>
 			</div>
 		</div>

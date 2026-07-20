@@ -1,11 +1,10 @@
 import {type FromLeaves, type Leaves} from "./utils"
-import {type Data} from "./index"
 
-export type DataFunction<D extends Data, N = never> = {
+export type DataFunction<D extends object, N = never> = {
 	<L extends Leaves<D, N>>(leaves: L): FromLeaves<D, L, N>
 } & D
 
-export const toDataFunction = <D extends Data>(data: D): DataFunction<D> => {
+export const toDataFunction = <D extends object>(data: D): DataFunction<D> => {
 	const translation = (leaves: Leaves<D>) => {
 		let value: unknown = data
 

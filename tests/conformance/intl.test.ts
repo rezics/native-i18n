@@ -1,6 +1,7 @@
 import {describe, expect, test} from "vitest"
 import {
 	compact,
+	compile,
 	create,
 	createIntl,
 	currency,
@@ -8,46 +9,51 @@ import {
 	datetime,
 	displayName,
 	duration,
+	defineResources,
 	integer,
 	list,
 	number,
 	percent,
 	relativeTime,
 	time,
-	unit
+	unit,
+	type ContractOf,
+	type StandardNode
 } from "../../src/index"
 
 const context = {locale: "en-US", timeZone: "UTC"} as const
+const run = <Node extends StandardNode>(node: Node): ContractOf<Node> =>
+	compile(node, context) as ContractOf<Node>
 
 describe("standard Intl formatters", () => {
 	test("covers number, integer, currency, percent, unit and compact", () => {
-		expect(number({maximumFractionDigits: 1})(1234.56)).toBe(
+		expect(run(number({maximumFractionDigits: 1}))(1234.56)).toBe(
 			new Intl.NumberFormat("en", {maximumFractionDigits: 1}).format(
 				1234.56
 			)
 		)
-		expect(integer()(12.8)).toBe(
+		expect(run(integer())(12.8)).toBe(
 			new Intl.NumberFormat("en", {
 				minimumFractionDigits: 0,
 				maximumFractionDigits: 0
 			}).format(12.8)
 		)
-		expect(currency("USD")(12)).toBe(
+		expect(run(currency("USD"))(12)).toBe(
 			new Intl.NumberFormat("en", {
 				style: "currency",
 				currency: "USD"
 			}).format(12)
 		)
-		expect(percent()(0.25)).toBe(
+		expect(run(percent())(0.25)).toBe(
 			new Intl.NumberFormat("en", {style: "percent"}).format(0.25)
 		)
-		expect(unit("kilometer")(2)).toBe(
+		expect(run(unit("kilometer"))(2)).toBe(
 			new Intl.NumberFormat("en", {
 				style: "unit",
 				unit: "kilometer"
 			}).format(2)
 		)
-		expect(compact()(1200)).toBe(
+		expect(run(compact())(1200)).toBe(
 			new Intl.NumberFormat("en", {notation: "compact"}).format(1200)
 		)
 	})
@@ -58,13 +64,16 @@ describe("standard Intl formatters", () => {
 			clock: time({timeStyle: "short"}),
 			stamp: datetime({dateStyle: "short", timeStyle: "short"})
 		}
-		const languages = [
-			{tag: "en-US", data: formatters},
-			{tag: "de-DE", data: formatters}
-		] as const
-		const data = await create(languages, {timeZone: "Asia/Shanghai"})([
-			"de-DE"
-		])
+		const resources = defineResources({
+			fallbackLocale: "en-US",
+			loaders: {
+				"en-US": {formats: () => formatters},
+				"de-DE": {formats: () => formatters}
+			}
+		})
+		const {data} = await create(resources, {
+			timeZone: "Asia/Shanghai"
+		}).getTranslation("formats", ["de-DE"])
 		const instant = Date.UTC(2024, 0, 2, 15, 4)
 
 		expect(data.day(instant)).toBe(
@@ -89,26 +98,26 @@ describe("standard Intl formatters", () => {
 	})
 
 	test("covers relative time, list and display names", () => {
-		expect(relativeTime("day", {numeric: "always"})(-1)).toBe(
+		expect(run(relativeTime("day", {numeric: "always"}))(-1)).toBe(
 			new Intl.RelativeTimeFormat("en", {numeric: "always"}).format(
 				-1,
 				"day"
 			)
 		)
-		expect(relativeTime({numeric: "auto"})(0, "day")).toBe(
+		expect(run(relativeTime({numeric: "auto"}))(0, "day")).toBe(
 			new Intl.RelativeTimeFormat("en", {numeric: "auto"}).format(
 				0,
 				"day"
 			)
 		)
-		expect(list({type: "conjunction"})(["a", "b", "c"])).toBe(
+		expect(run(list({type: "conjunction"}))(["a", "b", "c"])).toBe(
 			new Intl.ListFormat("en", {type: "conjunction"}).format([
 				"a",
 				"b",
 				"c"
 			])
 		)
-		expect(displayName("region")("US")).toBe(
+		expect(run(displayName("region"))("US")).toBe(
 			new Intl.DisplayNames("en", {type: "region"}).of("US")
 		)
 	})
@@ -119,9 +128,11 @@ describe("standard Intl formatters", () => {
 		).DurationFormat
 
 		if (DurationFormat)
-			expect(duration()({hours: 1, minutes: 30})).toBeTruthy()
+			expect(run(duration())({hours: 1, minutes: 30})).toBeTruthy()
 		else
-			expect(() => duration()({hours: 1})).toThrow(/Intl\.DurationFormat/)
+			expect(() => run(duration())({hours: 1})).toThrow(
+				/Intl\.DurationFormat/
+			)
 	})
 
 	test("exposes locale-bound native Intl factories", () => {

@@ -1,25 +1,31 @@
 import {
-	create,
+	compile,
+	create as createCore,
 	currency,
+	defineResources,
 	insert,
 	integer,
 	plural,
 	unused,
-	value
+	value,
+	type ContractOf
 } from "../../src/index"
+import {create as createClient} from "../../src/react/factory"
 import {toDataFunction} from "../../src/translation"
 
 const greeting = insert("Hello {{name}}. You are {{age}}.", {
 	name: String,
 	age: integer()
 })
-greeting({name: "Ada", age: 37})
+const compiledGreeting = compile<ContractOf<typeof greeting>>(greeting)
+compiledGreeting({name: "Ada", age: 37})
 
 // @ts-expect-error age is required by the pattern contract.
-greeting({name: "Ada"})
+compiledGreeting({name: "Ada"})
 // @ts-expect-error unexpected call fields are rejected.
-greeting({name: "Ada", age: 37, extra: true})
-const incomplete = insert("Hello {{name}} {{age}}", {name: String})
+compiledGreeting({name: "Ada", age: 37, extra: true})
+const incompleteNode = insert("Hello {{name}} {{age}}", {name: String})
+const incomplete = compile<ContractOf<typeof incompleteNode>>(incompleteNode)
 // @ts-expect-error unresolved pattern holes make a top-level message uncallable.
 incomplete({name: "Ada", age: 37})
 // @ts-expect-error extra bindings must be explicitly marked unused.
@@ -29,37 +35,100 @@ const localizedGreeting = insert("{{age}}歳", {
 	name: unused(String),
 	age: integer()
 })
-localizedGreeting({name: "Ada", age: 37})
+compile<ContractOf<typeof localizedGreeting>>(localizedGreeting)({
+	name: "Ada",
+	age: 37
+})
 
 const raw = insert("Hello {{node}}", {node: value<{id: number}>()})
-raw({node: {id: 1}})
+const compiledRaw = compile<ContractOf<typeof raw>>(raw)
+compiledRaw({node: {id: 1}})
 // @ts-expect-error raw values retain their declared input type.
-raw({node: "link"})
+compiledRaw({node: "link"})
 
 const files = plural({
 	one: insert("{{value}} file"),
 	other: insert("{{value}} files")
 })
-files(2)
+const compiledFiles = compile<ContractOf<typeof files>>(files)
+compiledFiles(2)
 // @ts-expect-error plural selectors are numeric.
-files("two")
+compiledFiles("two")
 
-currency("USD")(12n)
+const price = compile<ContractOf<ReturnType<typeof currency>>>(currency("USD"))
+price(12n)
 // @ts-expect-error currency only accepts number or bigint.
-currency("USD")("12")
+price("12")
 
-const customLanguages = [
-	{tag: "en", data: {message: (name: string) => name}}
-] as const
+const localizedText: ContractOf<"fallback copy"> = "localized copy"
+void localizedText
+
+const resources = defineResources({
+	fallbackLocale: "en",
+	loaders: {
+		en: {
+			common: () => ({title: "Home"}),
+			home: () => ({welcome: greeting})
+		},
+		de: {
+			common: () => ({title: "Startseite"}),
+			home: () => ({welcome: greeting})
+		}
+	}
+})
+const core = createCore(resources)
+core.getTranslation("common", ["de"])
+core.getTranslation(["common", "home"], ["de"])
+// @ts-expect-error a namespace selection cannot be empty.
+core.getTranslation([], ["de"])
+// @ts-expect-error only declared namespaces can be selected.
+core.getTranslation("checkout", ["de"])
+
+const loaderClient = createClient(resources)
+loaderClient.preload("home")
+const seededClient = createClient<typeof resources>()
+// @ts-expect-error a seeded-only client has no runtime preload API.
+seededClient.preload("home")
+
 if (false) {
-	// @ts-expect-error custom translation functions are never accepted.
-	create(customLanguages)
+	defineResources({
+		fallbackLocale: "en",
+		loaders: {
+			en: {
+				// @ts-expect-error translation catalogs cannot contain functions.
+				common: () => ({message: (name: string) => name})
+			}
+		}
+	})
+
+	defineResources({
+		fallbackLocale: "en",
+		loaders: {
+			en: {
+				common: () => ({title: "Home"}),
+				home: () => ({welcome: "Welcome"})
+			},
+			// @ts-expect-error every locale must expose the fallback namespaces.
+			de: {common: () => ({title: "Startseite"})}
+		}
+	})
+
+	defineResources({
+		fallbackLocale: "en",
+		loaders: {
+			en: {common: () => ({title: "Home"})},
+			de: {
+				// @ts-expect-error locale namespace contracts must match the fallback.
+				common: () => ({title: 42})
+			}
+		}
+	})
 }
 
 const t = toDataFunction({
 	greeting: "Hello",
 	items: {apple: "Apple"},
-	welcome: greeting
+	welcome: compiledGreeting
 })
 t.items.apple
 t.welcome({name: "Ada", age: 37})

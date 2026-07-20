@@ -1,16 +1,22 @@
+import {defineResources} from "native-i18n"
 import {create} from "native-i18n/react"
-import enUS from "./languages/en-US"
 
-export const languages = [
-	{tag: "en-US", data: enUS},
-	{
-		tag: "de-DE",
-		data: () => import("./languages/de-DE").then(module => module.default)
-	},
-	{
-		tag: "ja-JP",
-		data: () => import("./languages/ja-JP").then(module => module.default)
+export const resources = defineResources({
+	fallbackLocale: "en-US",
+	loaders: {
+		"en-US": {
+			kitchen: () =>
+				import("./languages/en-US").then(module => module.default)
+		},
+		"de-DE": {
+			kitchen: () =>
+				import("./languages/de-DE").then(module => module.default)
+		},
+		"ja-JP": {
+			kitchen: () =>
+				import("./languages/ja-JP").then(module => module.default)
+		}
 	}
-] as const
+})
 
-export const {useTranslation} = create(languages, {timeZone: "Asia/Shanghai"})
+export const {useTranslation} = create(resources, {timeZone: "Asia/Shanghai"})

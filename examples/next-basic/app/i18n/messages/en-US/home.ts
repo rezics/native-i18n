@@ -1,10 +1,8 @@
 import {insert, plural} from "native-i18n"
 
 export default {
-	greeting: "Hello!",
-	farewell: "Goodbye!",
-	description: "This is a native TypeScript i18n example using Native I18n.",
-	items: {apple: "Apple", banana: "Banana", cherry: "Cherry"},
+	greeting: "Hello from Server Components!",
+	description: "This page uses Native I18n's Next.js helpers.",
 	welcome: insert("Welcome, {{name}}!", {name: String}),
 	itemCount: plural({
 		one: insert("You have {{value}} item."),

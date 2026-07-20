@@ -1,46 +1,42 @@
 import {cookies, headers} from "next/headers"
+import {cache} from "react"
 import {
-	create as _create,
-	toTranslationSnapshot,
+	create as createCore,
+	parseAcceptLanguage,
+	type AnyResources,
 	type CreateOptions,
-	type Data,
-	type Translation,
-	type ServerTranslationResult,
-	type ValidLanguages
+	type LocaleOf,
+	type NamespaceSelection,
+	type TranslationResult
 } from ".."
-import {normalizeLanguageTag, parseAcceptLanguage} from "../locale"
-import {toDataFunction} from "../translation"
+import {normalizeLanguageTag} from "../locale"
 
 export type NextCreateOptions = CreateOptions & {
 	readonly cookieName?: string | false
 }
 
-export type NextCreateResult<
-	T extends string,
-	D extends Data,
-	O extends NextCreateOptions = NextCreateOptions
-> = {
-	readonly getTranslation: (
+export type NextCreateResult<R extends AnyResources> = {
+	readonly getTranslation: <const Selection extends NamespaceSelection<R>>(
+		selection: Selection,
 		tags?: readonly string[]
-	) => Promise<ServerTranslationResult<T, D>>
+	) => Promise<TranslationResult<R, Selection>>
 	readonly getLocaleTags: () => Promise<string[]>
-	readonly match: ReturnType<typeof _create<T, D, O>>
+	readonly matchLocale: (tags: readonly string[]) => LocaleOf<R>
+	readonly preload: <const Selection extends NamespaceSelection<R>>(
+		selection: Selection,
+		tags?: readonly string[]
+	) => Promise<void>
 }
 
 const defaultCookieName = "NEXT_LOCALE"
 
-export const create = <
-	const T extends string,
-	const D extends Data,
-	const O extends NextCreateOptions = {}
->(
-	languages: ValidLanguages<T, D>,
-	options: O = {} as O
-): NextCreateResult<T, D, O> => {
-	const match = _create(languages, options)
+export const create = <const R extends AnyResources>(
+	resources: R,
+	options: NextCreateOptions = {}
+): NextCreateResult<R> => {
+	const core = createCore(resources, options)
 	const cookieName = options.cookieName ?? defaultCookieName
-
-	const getLocaleTags = async () => {
+	const getLocaleTags = cache(async () => {
 		const [cookieStore, headersList] = await Promise.all([
 			cookieName === false ? Promise.resolve(undefined) : cookies(),
 			headers()
@@ -57,23 +53,17 @@ export const create = <
 			(locale, index, locales): locale is string =>
 				Boolean(locale) && locales.indexOf(locale) === index
 		)
+	})
+
+	const resolveTags = async (tags?: readonly string[]) =>
+		tags ?? (await getLocaleTags())
+
+	return {
+		getLocaleTags,
+		matchLocale: core.matchLocale,
+		getTranslation: async (selection, tags) =>
+			core.getTranslation(selection, await resolveTags(tags)),
+		preload: async (selection, tags) =>
+			core.preload(selection, await resolveTags(tags))
 	}
-
-	const getTranslation = async (tags?: readonly string[]) => {
-		const result = match([...(tags ?? (await getLocaleTags()))])
-		const data = await result
-		const translation: Translation<T, D> = {
-			data,
-			locale: {
-				current: result.context.locale as T,
-				target: result.locale.target
-			}
-		}
-		const base = {...translation, t: toDataFunction(data)}
-		const snapshot = toTranslationSnapshot(translation, result.context)
-
-		return {...base, snapshot} as ServerTranslationResult<T, D>
-	}
-
-	return {getTranslation, getLocaleTags, match}
 }
