@@ -58,6 +58,18 @@ an asynchronous loader.
 
 ## Standard message functions
 
+Keep static translations as plain strings. Use the standard message functions
+only when a translation needs interpolation, selection, plural rules, or other
+runtime formatting:
+
+```ts
+const data = {
+	title: "Account",
+	welcome: insert("Welcome, {{name}}!", {name: String}),
+	files: plural({one: "one file", other: insert("{{value}} files")})
+}
+```
+
 ### Pattern and insert
 
 `insert` is the only function that parses Pattern syntax. Pattern is a
@@ -222,15 +234,32 @@ function Page() {
 ```
 
 useTranslation uses navigator.languages by default. Pass a tag list or {tags,
-suspense} to override it. It returns {data, locale, t}; t is both the
-translation object and a typed leaf-path lookup:
+suspense} to override it. It returns {data, locale, t}. Prefer property access
+for normal application code; it provides the best completion, navigation, and
+rename experience:
 
 ```ts
 t.items.apple
-t("items.apple")
 t.welcome({name: "Ada"})
-t("welcome")({name: "Ada"})
 ```
+
+`t` also supports typed string paths for cases where a translation key must be
+stored or passed as data, such as configuration or component props. Keep the
+key's literal type instead of widening it to `string`:
+
+```ts
+const itemLabelKey = "items.apple" as const
+t(itemLabelKey)
+
+type TranslationKey = Parameters<typeof t>[0]
+
+function readTranslation(key: TranslationKey) {
+	return t(key)
+}
+```
+
+String-path lookup is a secondary API for these dynamic-key cases, not the
+recommended default access style.
 
 ## React Server Components
 
@@ -260,7 +289,7 @@ return (
 The server result contains:
 
 - data: materialized server functions.
-- t: the server-only typed lookup function.
+- t: the server-only translation object with optional typed string-path lookup.
 - locale: current and target locale.
 - snapshot: function-free recipe data for a Client Component.
 
@@ -345,7 +374,7 @@ precise semantic assertions. Each example has one explicit responsibility:
 | Example        | What it verifies                                                                                                                                                                                                                              |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `native-basic` | Framework-free `create`/`match`, synchronous fallback data, lazy locale modules, nested data, `insert`, and `plural`.                                                                                                                         |
-| `react-basic`  | `useTranslation`, browser locale detection, an explicit locale override, lazy client loading, object access, and typed leaf-path access.                                                                                                      |
+| `react-basic`  | `useTranslation`, browser locale detection, an explicit locale override, lazy client loading, and the recommended property-access style.                                                                                                      |
 | `next-basic`   | App Router request locale resolution, RSC-safe snapshots, Provider hydration, Suspense, cookie-backed `useSetLocale`, and localized server/404 rendering.                                                                                     |
 | `kitchen-sink` | The complete standard message and Intl surface: interpolation, exact/cardinal plural, ordinal, select, range, offset, nested composition, `unused`, raw React values, every formatter, locale switching, and deterministic time-zone binding. |
 

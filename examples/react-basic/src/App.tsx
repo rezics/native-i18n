@@ -41,8 +41,8 @@ export default function App() {
 				</p>
 				<p>{t.description}</p>
 				<p>{t.welcome({name: "Alice"})}</p>
-				<p>{t("itemCount")(3)}</p>
-				<p>{t("farewell")}</p>
+				<p>{t.itemCount(3)}</p>
+				<p>{t.farewell}</p>
 				<p>
 					Items: {t.items.apple}, {t.items.banana}, {t.items.cherry}
 				</p>

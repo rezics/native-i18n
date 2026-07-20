@@ -180,9 +180,6 @@ export default function App() {
 						<Row label={'displayName("region") → "DE"'}>
 							{t.formats.region("DE")}
 						</Row>
-						<Row label={'t("formats.region") → "JP"'}>
-							{t("formats.region")("JP")}
-						</Row>
 					</Section>
 				</div>
 			</div>

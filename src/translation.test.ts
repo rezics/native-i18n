@@ -2,7 +2,7 @@ import {describe, expect, test} from "vitest"
 import {toDataFunction} from "./translation"
 
 describe("toDataFunction", () => {
-	test("supports object and leaf-path access", () => {
+	test("prefers object access and supports typed keys stored as data", () => {
 		const t = toDataFunction({
 			greeting: "Hello",
 			items: {apple: "Apple"},
@@ -11,7 +11,10 @@ describe("toDataFunction", () => {
 
 		expect(t.greeting).toBe("Hello")
 		expect(t.items.apple).toBe("Apple")
-		expect(t("items.apple")).toBe("Apple")
-		expect(t("welcome")("Ada")).toBe("Hello, Ada")
+
+		const itemKey = "items.apple" as const
+		const welcomeKey = "welcome" as const
+		expect(t(itemKey)).toBe("Apple")
+		expect(t(welcomeKey)("Ada")).toBe("Hello, Ada")
 	})
 })

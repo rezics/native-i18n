@@ -61,8 +61,14 @@ const t = toDataFunction({
 	items: {apple: "Apple"},
 	welcome: greeting
 })
-t("items.apple")
-t("welcome")({name: "Ada", age: 37})
+t.items.apple
+t.welcome({name: "Ada", age: 37})
+
+type TranslationKey = Parameters<typeof t>[0]
+const itemKey: TranslationKey = "items.apple"
+t(itemKey)
+const readTranslation = (key: TranslationKey) => t(key)
+readTranslation("greeting")
 // @ts-expect-error only leaf paths are accepted.
 t("items")
 // @ts-expect-error unknown paths are rejected.

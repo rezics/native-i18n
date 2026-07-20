@@ -24,6 +24,6 @@ describe("react/server", () => {
 
 		expect(locale).toEqual({current: "zh-CN", target: "zh-CN"})
 		expect(t.greeting).toBe("你好")
-		expect(t("welcome")({name: "Ada"})).toBe("你好，Ada")
+		expect(t.welcome({name: "Ada"})).toBe("你好，Ada")
 	})
 })
