@@ -3,8 +3,8 @@ import enUS from "./languages/en-US"
 
 const en = {tag: "en-US", data: enUS} as const
 const zh = {
-	tag: "zh-CN",
-	data: () => import("./languages/zh-CN").then(m => m.default)
+	tag: "zh-Hant",
+	data: () => import("./languages/zh-Hant").then(m => m.default)
 } as const
 const ja = {
 	tag: "ja-JP",

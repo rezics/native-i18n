@@ -7,7 +7,7 @@ import {create, type NextClientCreateOptions} from "./client"
 vi.mock("next/navigation", () => ({useRouter: vi.fn()}))
 
 const en = {tag: "en-US", data: {greeting: "Hello"}}
-const zh = {tag: "zh-CN", data: async () => ({greeting: "你好"})}
+const zh = {tag: "zh-Hant", data: async () => ({greeting: "你好"})}
 
 describe("next/client", () => {
 	beforeEach(() => {
@@ -49,10 +49,10 @@ describe("next/client", () => {
 		await stream.allReady
 		await new Response(stream).text()
 
-		setLocale("zh-cn")
+		setLocale("zh-hant")
 
 		expect(document.cookie).toBe(
-			"NEXT_LOCALE=zh-CN; Path=/; Max-Age=31536000; SameSite=lax; Secure"
+			"NEXT_LOCALE=zh-Hant; Path=/; Max-Age=31536000; SameSite=lax; Secure"
 		)
 		expect(refresh).toHaveBeenCalledOnce()
 	})
@@ -103,10 +103,10 @@ describe("next/client", () => {
 		await stream.allReady
 		await new Response(stream).text()
 
-		setLocale("zh-CN")
+		setLocale("zh-Hant")
 
 		expect(document.cookie).toBe(
-			"NEXT_LOCALE=zh-CN; Path=/; Max-Age=31536000; SameSite=lax"
+			"NEXT_LOCALE=zh-Hant; Path=/; Max-Age=31536000; SameSite=lax"
 		)
 	})
 
@@ -116,7 +116,7 @@ describe("next/client", () => {
 		const stream = await renderToReadableStream(
 			createElement(
 				TranslationProvider,
-				{tags: ["zh-CN"]},
+				{tags: ["zh-Hant"]},
 				createElement(function Login() {
 					const {t, locale} = useTranslation({
 						suspense: false
@@ -133,8 +133,8 @@ describe("next/client", () => {
 		await stream.allReady
 		const html = await new Response(stream).text()
 
-		expect(html).toContain("zh-CN/zh-CN:你好")
-		expect(html).not.toContain("en-US/zh-CN:Hello")
+		expect(html).toContain("zh-Hant/zh-Hant:你好")
+		expect(html).not.toContain("en-US/zh-Hant:Hello")
 	})
 
 	test("suspends useLocale until the target language is resolved", async () => {
@@ -143,7 +143,7 @@ describe("next/client", () => {
 		const stream = await renderToReadableStream(
 			createElement(
 				TranslationProvider,
-				{tags: ["zh-CN"]},
+				{tags: ["zh-Hant"]},
 				createElement(function Locale() {
 					const locale = useLocale()
 
@@ -158,7 +158,7 @@ describe("next/client", () => {
 		await stream.allReady
 		const html = await new Response(stream).text()
 
-		expect(html).toContain("zh-CN/zh-CN")
-		expect(html).not.toContain("en-US/zh-CN")
+		expect(html).toContain("zh-Hant/zh-Hant")
+		expect(html).not.toContain("en-US/zh-Hant")
 	})
 })

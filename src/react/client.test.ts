@@ -4,18 +4,18 @@ import {describe, expect, test} from "vitest"
 import {create} from "./client"
 
 const en = {tag: "en-US", data: {greeting: "Hello"}}
-const zh = {tag: "zh-CN", data: async () => ({greeting: "你好"})}
+const zh = {tag: "zh-Hant", data: async () => ({greeting: "你好"})}
 
 describe("react/client", () => {
 	test("keeps the hydration snapshot on fallback when initial is absent", async () => {
 		const {TranslationProvider, preload, useTranslation} = create([en, zh])
 
-		await preload(["zh-CN"])
+		await preload(["zh-Hant"])
 
 		const html = renderToString(
 			createElement(
 				TranslationProvider,
-				{tags: ["zh-CN"]},
+				{tags: ["zh-Hant"]},
 				createElement(function Login() {
 					const {t, locale} = useTranslation()
 
@@ -28,7 +28,7 @@ describe("react/client", () => {
 			)
 		)
 
-		expect(html).toContain("en-US/zh-CN:Hello")
+		expect(html).toContain("en-US/zh-Hant:Hello")
 	})
 
 	test("uses provider initial data for the hydration snapshot", async () => {
@@ -38,11 +38,11 @@ describe("react/client", () => {
 			createElement(
 				TranslationProvider,
 				{
-					tags: ["zh-CN"],
+					tags: ["zh-Hant"],
 					initial: {
 						data: {greeting: "你好"},
-						locale: {current: "zh-CN", target: "zh-CN"},
-						context: {locale: "zh-CN", timeZone: "UTC"}
+						locale: {current: "zh-Hant", target: "zh-Hant"},
+						context: {locale: "zh-Hant", timeZone: "UTC"}
 					}
 				},
 				createElement(function Login() {
@@ -57,28 +57,28 @@ describe("react/client", () => {
 			)
 		)
 
-		expect(html).toContain("zh-CN/zh-CN:你好")
+		expect(html).toContain("zh-Hant/zh-Hant:你好")
 	})
 
 	test("keeps server translation stores isolated between renders", async () => {
 		const {TranslationProvider, useTranslation} = create([
 			en,
-			{tag: "zh-CN", data: async () => ({greeting: "loader-value"})}
+			{tag: "zh-Hant", data: async () => ({greeting: "loader-value"})}
 		])
 		const render = async (initial?: {
 			readonly data: {readonly greeting: string}
 			readonly locale: {
-				readonly current: "zh-CN"
-				readonly target: "zh-CN"
+				readonly current: "zh-Hant"
+				readonly target: "zh-Hant"
 			}
 			readonly context: {
-				readonly locale: "zh-CN"
+				readonly locale: "zh-Hant"
 				readonly timeZone: "UTC"
 			}
 		}) => {
 			const providerProps = initial
-				? {tags: ["zh-CN"], initial}
-				: {tags: ["zh-CN"]}
+				? {tags: ["zh-Hant"], initial}
+				: {tags: ["zh-Hant"]}
 			const stream = await renderToReadableStream(
 				createElement(
 					TranslationProvider,
@@ -97,8 +97,8 @@ describe("react/client", () => {
 		expect(
 			await render({
 				data: {greeting: "request-A-only"},
-				locale: {current: "zh-CN", target: "zh-CN"},
-				context: {locale: "zh-CN", timeZone: "UTC"}
+				locale: {current: "zh-Hant", target: "zh-Hant"},
+				context: {locale: "zh-Hant", timeZone: "UTC"}
 			})
 		).toContain("request-A-only")
 		expect(await render()).toContain("loader-value")

@@ -5,7 +5,7 @@ import {create} from "./index"
 vi.mock("next/headers", () => ({cookies: vi.fn(), headers: vi.fn()}))
 
 const en = {tag: "en-US", data: {greeting: "Hello"}}
-const zh = {tag: "zh-CN", data: {greeting: "你好"}}
+const zh = {tag: "zh-Hant", data: {greeting: "你好"}}
 const ja = {tag: "ja-JP", data: {greeting: "こんにちは"}}
 
 describe("next", () => {
@@ -20,12 +20,12 @@ describe("next", () => {
 		} as Awaited<ReturnType<typeof cookies>>)
 		vi.mocked(headers).mockResolvedValue({
 			get: (name: string) =>
-				name === "accept-language" ? "zh-CN;q=0.9,en-US;q=0.8" : null
+				name === "accept-language" ? "zh-Hant;q=0.9,en-US;q=0.8" : null
 		} as Awaited<ReturnType<typeof headers>>)
 
 		const {getLocaleTags, getTranslation} = create([en, zh, ja])
 
-		expect(await getLocaleTags()).toEqual(["ja-JP", "zh-CN", "en-US"])
+		expect(await getLocaleTags()).toEqual(["ja-JP", "zh-Hant", "en-US"])
 
 		const {t, locale} = await getTranslation()
 		expect(locale).toEqual({current: "ja-JP", target: "ja-JP"})
@@ -35,12 +35,12 @@ describe("next", () => {
 	test("can disable cookie lookup", async () => {
 		vi.mocked(headers).mockResolvedValue({
 			get: (name: string) =>
-				name === "accept-language" ? "zh-CN,en-US;q=0.8" : null
+				name === "accept-language" ? "zh-Hant,en-US;q=0.8" : null
 		} as Awaited<ReturnType<typeof headers>>)
 
 		const {getLocaleTags} = create([en, zh, ja], {cookieName: false})
 
-		expect(await getLocaleTags()).toEqual(["zh-CN", "en-US"])
+		expect(await getLocaleTags()).toEqual(["zh-Hant", "en-US"])
 		expect(cookies).not.toHaveBeenCalled()
 	})
 
@@ -51,15 +51,15 @@ describe("next", () => {
 		} as Awaited<ReturnType<typeof cookies>>)
 		vi.mocked(headers).mockResolvedValue({
 			get: (name: string) =>
-				name === "accept-language" ? "zh-CN,en-US;q=0.8" : null
+				name === "accept-language" ? "zh-Hant,en-US;q=0.8" : null
 		} as Awaited<ReturnType<typeof headers>>)
 
 		const {getLocaleTags, getTranslation} = create([en, zh, ja])
 
-		expect(await getLocaleTags()).toEqual(["zh-CN", "en-US"])
+		expect(await getLocaleTags()).toEqual(["zh-Hant", "en-US"])
 		expect((await getTranslation()).locale).toEqual({
-			current: "zh-CN",
-			target: "zh-CN"
+			current: "zh-Hant",
+			target: "zh-Hant"
 		})
 	})
 })

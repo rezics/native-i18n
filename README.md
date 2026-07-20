@@ -40,8 +40,8 @@ const en = {
 } as const
 
 const zh = {
-	tag: "zh-CN",
-	data: () => import("./zh-CN").then(module => module.default)
+	tag: "zh-Hant",
+	data: () => import("./zh-Hant").then(module => module.default)
 } as const
 
 const match = create([en, zh], {timeZone: "UTC"})
@@ -195,7 +195,7 @@ advanced cases without adding custom translation functions.
 ## Matching and locale state
 
 ```ts
-const result = match(["zh-CN"])
+const result = match(["zh-Hant"])
 
 result.locale.current // fallback data available immediately
 result.locale.target // best matched target
@@ -277,10 +277,10 @@ export const {getTranslation} = create(languages, {timeZone: "UTC"})
 
 ```tsx
 // Server Component
-const translation = await getTranslation(["zh-CN"])
+const translation = await getTranslation(["zh-Hant"])
 
 return (
-	<TranslationProvider tags={["zh-CN"]} initial={translation.snapshot}>
+	<TranslationProvider tags={["zh-Hant"]} initial={translation.snapshot}>
 		{children}
 	</TranslationProvider>
 )
@@ -373,7 +373,7 @@ precise semantic assertions. Each example has one explicit responsibility:
 
 | Example        | What it verifies                                                                                                                                                                                                                              |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `native-basic` | Framework-free `create`/`match`, synchronous fallback data, lazy locale modules, nested data, `insert`, and `plural`.                                                                                                                         |
+| `native-basic` | Framework-free `create`/`match`, application-defined `en`/`zh-Hant` tags and canonicalization, synchronous fallback data, lazy locale modules, nested data, `insert`, and `plural`.                                                           |
 | `react-basic`  | `useTranslation`, browser locale detection, an explicit locale override, lazy client loading, and the recommended property-access style.                                                                                                      |
 | `next-basic`   | App Router request locale resolution, RSC-safe snapshots, Provider hydration, Suspense, cookie-backed `useSetLocale`, and localized server/404 rendering.                                                                                     |
 | `kitchen-sink` | The complete standard message and Intl surface: interpolation, exact/cardinal plural, ordinal, select, range, offset, nested composition, `unused`, raw React values, every formatter, locale switching, and deterministic time-zone binding. |

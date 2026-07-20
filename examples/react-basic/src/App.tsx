@@ -1,7 +1,7 @@
 import {useState} from "react"
 import {useTranslation} from "./i18n"
 
-const LOCALES = ["en-US", "zh-CN", "ja-JP"] as const
+const LOCALES = ["en-US", "zh-Hant", "ja-JP"] as const
 
 export default function App() {
 	const [locale, setLocale] = useState<string | undefined>(undefined)

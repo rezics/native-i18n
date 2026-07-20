@@ -4,8 +4,8 @@ import {normalizeLanguageTag, parseAcceptLanguage} from "./locale"
 describe("parseAcceptLanguage", () => {
 	test("sorts by q value and preserves stable order", () => {
 		expect(
-			parseAcceptLanguage("en-US,en;q=0.8, zh-CN;q=0.9, ja-JP;q=0.9")
-		).toEqual(["en-US", "zh-CN", "ja-JP", "en"])
+			parseAcceptLanguage("en-US,en;q=0.8, zh-Hant;q=0.9, ja-JP;q=0.9")
+		).toEqual(["en-US", "zh-Hant", "ja-JP", "en"])
 	})
 
 	test("filters invalid, wildcard, zero-quality, and duplicate tags", () => {
@@ -22,7 +22,7 @@ describe("parseAcceptLanguage", () => {
 	})
 
 	test("normalizes individual BCP 47 tags", () => {
-		expect(normalizeLanguageTag("zh-cn")).toBe("zh-CN")
+		expect(normalizeLanguageTag("zh-hant")).toBe("zh-Hant")
 		expect(normalizeLanguageTag("en_US")).toBeUndefined()
 	})
 })

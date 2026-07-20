@@ -3,7 +3,7 @@
 import {useTransition} from "react"
 import {useSetLocale, useTranslation} from "./i18n/client"
 
-const locales = ["en-US", "zh-CN", "ja-JP"] as const
+const locales = ["en-US", "zh-Hant", "ja-JP"] as const
 
 export function LocaleSwitcher() {
 	const {t, locale} = useTranslation({suspense: true})

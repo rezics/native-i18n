@@ -10,7 +10,7 @@ const en = {
 	}
 }
 const zh = {
-	tag: "zh-CN",
+	tag: "zh-Hant",
 	data: async () => ({
 		greeting: "你好",
 		welcome: insert("你好，{{name}}", {name: String})
@@ -20,9 +20,9 @@ const zh = {
 describe("react/server", () => {
 	test("returns a data function and matched tag", async () => {
 		const {getTranslation} = create([en, zh])
-		const {t, locale} = await getTranslation(["zh-CN"])
+		const {t, locale} = await getTranslation(["zh-Hant"])
 
-		expect(locale).toEqual({current: "zh-CN", target: "zh-CN"})
+		expect(locale).toEqual({current: "zh-Hant", target: "zh-Hant"})
 		expect(t.greeting).toBe("你好")
 		expect(t.welcome({name: "Ada"})).toBe("你好，Ada")
 	})
