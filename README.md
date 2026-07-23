@@ -83,6 +83,47 @@ not remove unused keys within that namespace. Each explicit dynamic import is an
 async module boundary, although the final number and names of physical chunks
 remain a bundler decision.
 
+### Declare dependencies where they are used
+
+A component declares every namespace it reads directly at the hook call:
+
+```tsx
+function FeedCard() {
+	const {t} = useTranslation(["engagement", "feed", "ui"])
+
+	return <button aria-label={t.ui.like}>{t.engagement.likes(3)}</button>
+}
+```
+
+The factory knows the resource registry, so editors autocomplete every string in
+the array and TypeScript preserves the exact tuple without `as const`. This
+literal form is the preferred API: it keeps the dependency beside the consumer
+and gives future build tooling a statically analyzable boundary.
+
+Use `defineTranslationBundle` only when several consumers intentionally share
+the same namespace set:
+
+```ts
+const {defineTranslationBundle} = create(resources)
+
+export const feedNamespaces = defineTranslationBundle([
+	"engagement",
+	"feed",
+	"ui"
+])
+```
+
+It performs no loading and returns the same exact tuple. A type-only module can
+define a bundle without importing the runtime registry:
+
+```ts
+import {defineTranslationBundle} from "native-i18n"
+import type {resources} from "./resources"
+
+const defineBundle = defineTranslationBundle<typeof resources>()
+export const feedNamespaces = defineBundle(["engagement", "feed", "ui"])
+```
+
 ## Core API
 
 ```ts
@@ -91,10 +132,10 @@ import {resources} from "./i18n/resources"
 
 const i18n = create(resources, {timeZone: "UTC"})
 
-const {t, locale} = await i18n.getTranslation(["common", "home"] as const, [
-	"zh-Hant",
-	"en-US"
-])
+const {t, locale} = await i18n.getTranslation(
+	["common", "home"],
+	["zh-Hant", "en-US"]
+)
 
 t.common.back
 t.home.welcome({name: "Ada"})
@@ -231,7 +272,13 @@ translations:
 ```
 
 There is no `suspense` switch and no provider-wide boundary. Concurrent requests
-for the same locale and namespace share one pending load.
+for the same locale and namespace share one pending load. `preload(selection)`
+uses the same cache and can warm a feature on hover or before a transition.
+
+`TranslationProvider initial={snapshot}` hydrates data already loaded by the
+server, but the snapshot is a cache seed, not a declaration of every namespace
+that descendants may use. A descendant can add a namespace to its literal
+selection safely; only that missing locale × namespace pair is loaded.
 
 Property access is the primary API. `t` also supports typed string paths when a
 translation key genuinely needs to be passed as data:
@@ -254,18 +301,18 @@ import {resources} from "./resources"
 export const {getTranslation} = create(resources)
 ```
 
-Use the seeded client entry so no loader registry or core resolver enters the
-client graph:
+Use the loader-backed client when Client Components can declare namespaces that
+were not included in the server snapshot:
 
 ```ts
 // i18n/client.ts
 "use client"
 
-import {create} from "native-i18n/react/seeded"
-import type {resources} from "./resources"
+import {create} from "native-i18n/react/client"
+import {resources} from "./resources"
 
-export const {TranslationProvider, useLocale, useTranslation} =
-	create<typeof resources>()
+export const {TranslationProvider, preload, useLocale, useTranslation} =
+	create(resources)
 ```
 
 ```tsx
@@ -278,18 +325,25 @@ Snapshots contain only the selected namespace data and execution context. Nested
 providers share the same locale × namespace cache, so a route can seed
 additional namespaces without resending those already available.
 
+`native-i18n/react/seeded` remains available for a deliberately closed client
+subtree whose runtime registry must stay server-only. It accepts only the
+resource type and throws `NativeI18nNamespaceError` when a consumer asks for an
+unseeded namespace. Treat that entry as an explicit size-versus-resilience
+tradeoff, not the default correctness mechanism.
+
 ## Next.js App Router
 
-Keep the loader registry in a server-only module:
+Keep the resource registry client-safe: it should contain `defineResources` and
+explicit dynamic imports, but no secrets, Node-only APIs, or `server-only`
+marker. The registry itself is small; Next emits the translation modules behind
+its locale × namespace dynamic-import boundaries.
 
 ```ts
 // app/i18n/resources.ts
-import "server-only"
-
 import {defineResources} from "native-i18n"
 
 export const resources = defineResources({
-	/* explicit loaders */
+	/* explicit locale × namespace dynamic imports */
 })
 ```
 
@@ -302,22 +356,29 @@ export const {getLocaleTags, getTranslation, matchLocale, preload} =
 	create(resources)
 ```
 
-The client imports only its type. No loader or translation module enters the
-client graph:
+The client receives the same registry so an omitted server seed can be recovered
+locally:
 
 ```ts
 // app/i18n/client.ts
 "use client"
 
 import {create} from "native-i18n/next/client"
-import type {resources} from "./resources"
+import {resources} from "./resources"
 
-export const {TranslationProvider, useLocale, useSetLocale, useTranslation} =
-	create<typeof resources>()
+export const {
+	TranslationProvider,
+	preload,
+	useLocale,
+	useSetLocale,
+	useTranslation
+} = create(resources)
 ```
 
-Seed only client-consumed namespaces. For example, a root layout can provide a
-small `common` namespace while a page reads `home` exclusively on the server:
+Seed namespaces that are already known at the server boundary. This avoids a
+client request for the normal path without making the layout responsible for the
+complete dependency graph. For example, a root layout can provide a small
+`common` namespace while a page reads `home` exclusively on the server:
 
 ```tsx
 // app/layout.tsx
@@ -340,9 +401,29 @@ const {t} = await getTranslation("home")
 return <h1>{t.title}</h1>
 ```
 
-The seeded Next client path is synchronous and does not enable a separate Native
-I18n Suspense mode. Missing client namespaces are configuration errors. Next
-route loading and streaming boundaries remain responsible for navigation UX.
+If a Client Component below that layout later calls
+`useTranslation(["common", "engagement", "feed"])`, the seeded `common` data is
+reused and the other namespaces load concurrently through the nearest Suspense
+boundary. The server seed remains a performance optimization rather than a
+fragile coverage contract.
+
+For an intentionally closed subtree, `native-i18n/next/seeded` preserves the old
+type-only, zero-loader client graph:
+
+```ts
+"use client"
+
+import {create} from "native-i18n/next/seeded"
+import type {resources} from "./resources"
+
+export const {TranslationProvider, useLocale, useSetLocale, useTranslation} =
+	create<typeof resources>()
+```
+
+This strict entry is synchronous, but any namespace absent from the provider
+snapshot is a configuration error. Prefer the loader-backed default for shared
+layouts and evolving feature trees.
+
 `useSetLocale()` writes the locale cookie and performs `router.refresh()` in a
 transition, returning `{isPending, setLocale}`.
 
@@ -368,12 +449,12 @@ numbers, non-plain objects, and symbol-keyed data are rejected.
 
 ## Examples
 
-| Example        | Focus                                                                                          |
-| -------------- | ---------------------------------------------------------------------------------------------- |
-| `native-basic` | Framework-free locale × namespace loading.                                                     |
-| `react-basic`  | Client loaders, localized Suspense, and multi-namespace selection.                             |
-| `next-basic`   | Server-only registry, type-only client setup, selective RSC snapshots, and locale transitions. |
-| `kitchen-sink` | Complete standard message and Intl recipe surface.                                             |
+| Example        | Focus                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------ |
+| `native-basic` | Framework-free locale × namespace loading.                                                             |
+| `react-basic`  | Client loaders, localized Suspense, and multi-namespace selection.                                     |
+| `next-basic`   | Client-safe lazy registry, selective RSC seeds, recoverable client namespaces, and locale transitions. |
+| `kitchen-sink` | Complete standard message and Intl recipe surface.                                                     |
 
 ## Verification
 

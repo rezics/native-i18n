@@ -1,6 +1,6 @@
 {
 	"name": "native-i18n",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Your translations are your types.",
 	"license": "MIT",
 	"repository": {
@@ -103,6 +103,16 @@
 			"require": {
 				"types": "./dist/next/client.d.cts",
 				"require": "./dist/next/client.cjs"
+			}
+		},
+		"./next/seeded": {
+			"import": {
+				"types": "./dist/next/seeded.d.mts",
+				"import": "./dist/next/seeded.mjs"
+			},
+			"require": {
+				"types": "./dist/next/seeded.d.cts",
+				"require": "./dist/next/seeded.cjs"
 			}
 		}
 	},

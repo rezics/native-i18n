@@ -3,6 +3,7 @@ import {
 	create as createCore,
 	currency,
 	defineResources,
+	defineTranslationBundle,
 	insert,
 	integer,
 	plural,
@@ -10,6 +11,8 @@ import {
 	value,
 	type ContractOf
 } from "../../src/index"
+import {create as createNextClient} from "../../src/next/client"
+import {create as createNextSeededClient} from "../../src/next/seeded"
 import {create as createClient} from "../../src/react/factory"
 import {toDataFunction} from "../../src/translation"
 
@@ -79,16 +82,40 @@ const resources = defineResources({
 const core = createCore(resources)
 core.getTranslation("common", ["de"])
 core.getTranslation(["common", "home"], ["de"])
+const featureNamespaces = core.defineTranslationBundle(["common", "home"])
+core.getTranslation(featureNamespaces, ["de"])
+const homeNamespace = featureNamespaces[1]
+const exactHomeNamespace: "home" = homeNamespace
+void exactHomeNamespace
 // @ts-expect-error a namespace selection cannot be empty.
 core.getTranslation([], ["de"])
 // @ts-expect-error only declared namespaces can be selected.
 core.getTranslation("checkout", ["de"])
+// @ts-expect-error bundles only accept declared namespaces.
+core.defineTranslationBundle(["common", "checkout"])
+const defineBundle = defineTranslationBundle<typeof resources>()
+const typeOnlyNamespaces = defineBundle(["common", "home"])
+core.getTranslation(typeOnlyNamespaces)
+// @ts-expect-error type-only bundles retain namespace autocomplete and checks.
+defineBundle(["common", "checkout"])
 
 const loaderClient = createClient(resources)
 loaderClient.preload("home")
+const clientFeatureNamespaces = loaderClient.defineTranslationBundle([
+	"common",
+	"home"
+])
+loaderClient.useTranslation(clientFeatureNamespaces)
+loaderClient.useTranslation(["common", "home"])
+// @ts-expect-error raw arrays only autocomplete and accept declared namespaces.
+loaderClient.useTranslation(["common", "checkout"])
 const seededClient = createClient<typeof resources>()
 // @ts-expect-error a seeded-only client has no runtime preload API.
 seededClient.preload("home")
+const nextClient = createNextClient(resources)
+nextClient.useTranslation(["common", "home"])
+const nextSeededClient = createNextSeededClient<typeof resources>()
+nextSeededClient.useTranslation(["common", "home"])
 
 if (false) {
 	defineResources({

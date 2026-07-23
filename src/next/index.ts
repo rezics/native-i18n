@@ -7,6 +7,7 @@ import {
 	type CreateOptions,
 	type LocaleOf,
 	type NamespaceSelection,
+	type TranslationBundleFactory,
 	type TranslationResult
 } from ".."
 import {normalizeLanguageTag} from "../locale"
@@ -16,6 +17,7 @@ export type NextCreateOptions = CreateOptions & {
 }
 
 export type NextCreateResult<R extends AnyResources> = {
+	readonly defineTranslationBundle: TranslationBundleFactory<R>
 	readonly getTranslation: <const Selection extends NamespaceSelection<R>>(
 		selection: Selection,
 		tags?: readonly string[]
@@ -59,6 +61,7 @@ export const create = <const R extends AnyResources>(
 		tags ?? (await getLocaleTags())
 
 	return {
+		defineTranslationBundle: core.defineTranslationBundle,
 		getLocaleTags,
 		matchLocale: core.matchLocale,
 		getTranslation: async (selection, tags) =>

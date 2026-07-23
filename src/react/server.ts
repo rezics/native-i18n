@@ -4,10 +4,12 @@ import {
 	type CreateOptions,
 	type LocaleOf,
 	type NamespaceSelection,
+	type TranslationBundleFactory,
 	type TranslationResult
 } from ".."
 
 export type ServerCreateResult<R extends AnyResources> = {
+	readonly defineTranslationBundle: TranslationBundleFactory<R>
 	readonly getTranslation: <const Selection extends NamespaceSelection<R>>(
 		selection: Selection,
 		tags: readonly string[]
@@ -26,6 +28,7 @@ export const create = <const R extends AnyResources>(
 	const core = createCore(resources, options)
 
 	return {
+		defineTranslationBundle: core.defineTranslationBundle,
 		getTranslation: (selection, tags) =>
 			core.getTranslation(selection, tags),
 		matchLocale: core.matchLocale,

@@ -166,7 +166,7 @@ describe("react/client", () => {
 				TranslationProvider,
 				{initial: snapshot},
 				createElement(function Checkout() {
-					const {t} = useTranslation(["common", "checkout"] as const)
+					const {t} = useTranslation(["common", "checkout"])
 					return createElement(
 						"p",
 						null,

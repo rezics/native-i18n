@@ -20,6 +20,7 @@ import {
 	type NamespaceOf,
 	type NamespaceSelection,
 	type SelectedContract,
+	type TranslationBundleFactory,
 	type TranslationResult,
 	type TranslationSnapshot
 } from ".."
@@ -43,6 +44,7 @@ export type ClientTranslationResult<
 > = Omit<TranslationResult<R, Selection>, "snapshot">
 
 export type ClientCreateResult<R extends AnyResources> = {
+	readonly defineTranslationBundle: TranslationBundleFactory<R>
 	readonly TranslationProvider: <
 		const Selection extends NamespaceSelection<R>
 	>(
@@ -293,6 +295,7 @@ export function createClient<R extends AnyResources>(
 	}
 
 	return {
+		defineTranslationBundle: core.defineTranslationBundle,
 		TranslationProvider,
 		useTranslation,
 		useLocale,

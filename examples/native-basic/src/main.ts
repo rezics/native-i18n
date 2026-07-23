@@ -28,7 +28,7 @@ async function render(locale: string) {
 	output.textContent = "Loading…"
 
 	const {t, locale: resolved} = await i18n.getTranslation(
-		["common", "home"] as const,
+		["common", "home"],
 		[locale]
 	)
 	document.documentElement.lang = resolved.current

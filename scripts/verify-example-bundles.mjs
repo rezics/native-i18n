@@ -44,29 +44,46 @@ await assertAsyncChunks("kitchen-sink", {"en-US": 1, "de-DE": 1, "ja-JP": 1})
 const nextStaticFiles = (
 	await filesUnder(join(root, "examples", "next-basic", ".next", "static"))
 ).filter(path => path.endsWith(".js"))
-const nextStatic = (
-	await Promise.all(nextStaticFiles.map(path => readFile(path, "utf8")))
-).join("\n")
-const serverOnlyMessages = [
+const nextAssets = await Promise.all(
+	nextStaticFiles.map(async path => ({
+		path,
+		source: await readFile(path, "utf8")
+	}))
+)
+const translationMessages = [
 	"Hello from Server Components!",
 	"來自 Server Components 的你好！",
 	"Server Components からこんにちは！",
 	"Switch locale:",
 	"切換語言：",
-	"言語を切り替え："
+	"言語を切り替え：",
+	"The Client Component loaded its unseeded widget namespace.",
+	"Client Component 已載入未預先 seed 的 widget namespace。",
+	"Client Component が事前に seed されていない widget namespace を読み込みました。"
 ]
-const serverOnlyRuntime = [
-	"Fallback locale",
-	"Native I18n resource",
-	"Resource loader"
-]
+const translationChunks = new Set()
 
-for (const message of [...serverOnlyMessages, ...serverOnlyRuntime])
-	assert(
-		!nextStatic.includes(message),
-		`Next client chunks unexpectedly contain server-only content ${JSON.stringify(message)}.`
+for (const message of translationMessages) {
+	const containing = nextAssets.filter(asset =>
+		asset.source.includes(message)
 	)
+	assert(
+		containing.length === 1,
+		`Expected exactly one Next chunk containing ${JSON.stringify(message)}; found ${containing.length}.`
+	)
+	const [{path}] = containing
+	assert(
+		/[\\/]\d+\.[a-f0-9]+\.js$/.test(path),
+		`Next translation ${JSON.stringify(message)} should be emitted in an async chunk; found ${path}.`
+	)
+	translationChunks.add(path)
+}
+
+assert(
+	translationChunks.size >= 9,
+	`Next should emit at least 9 locale × namespace translation chunks; found ${translationChunks.size}.`
+)
 
 console.log(
-	"Verified locale × namespace chunks and the Next server/client boundary."
+	"Verified locale × namespace chunks and lazy Next translation boundaries."
 )

@@ -125,6 +125,22 @@ export type NamespaceSelection<R extends AnyResources> =
 	| NamespaceOf<R>
 	| readonly [NamespaceOf<R>, ...NamespaceOf<R>[]]
 
+export type TranslationBundle<
+	R extends AnyResources,
+	Selection extends NamespaceSelection<R> = NamespaceSelection<R>
+> = Selection
+
+export type TranslationBundleFactory<R extends AnyResources> = {
+	<const Selection extends NamespaceSelection<R>>(
+		selection: Selection
+	): TranslationBundle<R, Selection>
+}
+
+export const defineTranslationBundle =
+	<R extends AnyResources>(): TranslationBundleFactory<R> =>
+	selection =>
+		selection
+
 type SelectionNames<
 	R extends AnyResources,
 	Selection extends NamespaceSelection<R>
@@ -193,6 +209,7 @@ export type CreateOptions = {
 }
 
 export type CoreCreateResult<R extends AnyResources> = {
+	readonly defineTranslationBundle: TranslationBundleFactory<R>
 	readonly fallbackLocale: LocaleOf<R>
 	readonly locales: readonly LocaleOf<R>[]
 	readonly matchLocale: (tags: readonly string[]) => LocaleOf<R>
@@ -353,6 +370,7 @@ export const createCore = <const R extends AnyResources>(
 	}
 
 	return {
+		defineTranslationBundle: defineTranslationBundle<R>(),
 		fallbackLocale,
 		locales,
 		matchLocale,

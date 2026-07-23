@@ -49,6 +49,7 @@ export {
 } from "./standard"
 export {
 	createCore as create,
+	defineTranslationBundle,
 	defineResources,
 	type AnyResources,
 	type CoreCreateResult,
@@ -65,6 +66,8 @@ export {
 	type SelectedContract,
 	type SelectedSource,
 	type TranslationPrimitive,
+	type TranslationBundle,
+	type TranslationBundleFactory,
 	type TranslationResult,
 	type TranslationSnapshot,
 	type TranslationValue

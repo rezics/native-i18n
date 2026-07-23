@@ -1,7 +1,12 @@
 "use client"
 
 import {create} from "native-i18n/next/client"
-import type {resources} from "./resources"
+import {resources} from "./resources"
 
-export const {TranslationProvider, useLocale, useSetLocale, useTranslation} =
-	create<typeof resources>()
+export const {
+	TranslationProvider,
+	preload,
+	useLocale,
+	useSetLocale,
+	useTranslation
+} = create(resources)

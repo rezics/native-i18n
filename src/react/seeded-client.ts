@@ -14,8 +14,10 @@ import {
 	type NamespaceOf,
 	type NamespaceSelection,
 	type SelectedContract,
+	type TranslationBundleFactory,
 	type TranslationSnapshot
 } from "../resources"
+import {defineTranslationBundle} from "../resources"
 import {hydrate} from "../standard"
 import {toDataFunction, type DataFunction} from "../translation"
 import {NativeI18nNamespaceError} from "./error"
@@ -38,6 +40,7 @@ export type SeededClientTranslationResult<
 }
 
 export type SeededClientCreateResult<R extends AnyResources> = {
+	readonly defineTranslationBundle: TranslationBundleFactory<R>
 	readonly TranslationProvider: <
 		const Selection extends NamespaceSelection<R>
 	>(
@@ -143,5 +146,10 @@ export const createSeededClient = <
 		return locale
 	}
 
-	return {TranslationProvider, useTranslation, useLocale}
+	return {
+		defineTranslationBundle: defineTranslationBundle<R>(),
+		TranslationProvider,
+		useTranslation,
+		useLocale
+	}
 }

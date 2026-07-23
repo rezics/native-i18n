@@ -11,7 +11,8 @@ export default defineConfig([
 			"react/server": "src/react/server.ts",
 			"next/index": "src/next/index.ts",
 			"next/server": "src/next/server.ts",
-			"next/client": "src/next/client.ts"
+			"next/client": "src/next/client.ts",
+			"next/seeded": "src/next/seeded.ts"
 		},
 		outDir: "dist",
 		format: ["esm", "cjs"],

@@ -1,3 +1,4 @@
+import {Suspense} from "react"
 import {LocaleSwitcher} from "./LocaleSwitcher"
 import {getTranslation} from "./i18n/server"
 
@@ -17,7 +18,9 @@ export default async function Page() {
 			<p>{t.description}</p>
 			<p>{t.welcome({name: "Alice"})}</p>
 			<p>{t.itemCount(3)}</p>
-			<LocaleSwitcher />
+			<Suspense fallback={<p>Loading client translations…</p>}>
+				<LocaleSwitcher />
+			</Suspense>
 		</main>
 	)
 }

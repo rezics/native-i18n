@@ -1,5 +1,3 @@
-import "server-only"
-
 import {defineResources} from "native-i18n"
 
 export const resources = defineResources({
@@ -11,7 +9,9 @@ export const resources = defineResources({
 					module => module.default
 				),
 			home: () =>
-				import("./messages/en-US/home").then(module => module.default)
+				import("./messages/en-US/home").then(module => module.default),
+			widget: () =>
+				import("./messages/en-US/widget").then(module => module.default)
 		},
 		"zh-Hant": {
 			common: () =>
@@ -19,7 +19,13 @@ export const resources = defineResources({
 					module => module.default
 				),
 			home: () =>
-				import("./messages/zh-Hant/home").then(module => module.default)
+				import("./messages/zh-Hant/home").then(
+					module => module.default
+				),
+			widget: () =>
+				import("./messages/zh-Hant/widget").then(
+					module => module.default
+				)
 		},
 		"ja-JP": {
 			common: () =>
@@ -27,7 +33,9 @@ export const resources = defineResources({
 					module => module.default
 				),
 			home: () =>
-				import("./messages/ja-JP/home").then(module => module.default)
+				import("./messages/ja-JP/home").then(module => module.default),
+			widget: () =>
+				import("./messages/ja-JP/widget").then(module => module.default)
 		}
 	}
 })

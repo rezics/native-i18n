@@ -16,6 +16,13 @@ const resources = defineResources({
 })
 
 describe("create", () => {
+	test("defines reusable namespace bundles without widening literals", () => {
+		const core = create(resources)
+		const selection = core.defineTranslationBundle(["common", "checkout"])
+
+		expect(selection).toEqual(["common", "checkout"])
+	})
+
 	test("loads a locale and one namespace", async () => {
 		const i18n = create(resources)
 		const result = await i18n.getTranslation("common", ["zh-Hant"])
@@ -28,7 +35,7 @@ describe("create", () => {
 	test("loads multiple namespaces in parallel and preserves boundaries", async () => {
 		const i18n = create(resources)
 		const result = await i18n.getTranslation(
-			["common", "checkout"] as const,
+			["common", "checkout"],
 			["zh-Hant"]
 		)
 

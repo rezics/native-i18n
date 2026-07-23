@@ -26,10 +26,8 @@ describe("next/client", () => {
 
 	test("does not expose a locale setter when cookie persistence is disabled", () => {
 		const options: NextClientCreateOptions = {cookieName: false}
-		const client = create<typeof resources, typeof options>(options)
-		const disabled = create<typeof resources, {cookieName: false}>({
-			cookieName: false
-		})
+		const client = create(resources, options)
+		const disabled = create(resources, {cookieName: false})
 
 		expect(client).not.toHaveProperty("useSetLocale")
 		expect(
@@ -45,7 +43,7 @@ describe("next/client", () => {
 		>)
 		vi.stubGlobal("document", {cookie: ""})
 		vi.stubGlobal("location", {protocol: "https:"})
-		const {useSetLocale} = create<typeof resources>()
+		const {useSetLocale} = create(resources)
 		let setLocale: (locale?: string | null) => void = () => undefined
 
 		const stream = await renderToReadableStream(
@@ -71,7 +69,7 @@ describe("next/client", () => {
 			typeof useRouter
 		>)
 		vi.stubGlobal("document", {cookie: ""})
-		const {useSetLocale} = create<typeof resources>()
+		const {useSetLocale} = create(resources)
 		let setLocale: (locale?: string | null) => void = () => undefined
 
 		const stream = await renderToReadableStream(
@@ -96,7 +94,7 @@ describe("next/client", () => {
 		>)
 		vi.stubGlobal("document", {cookie: ""})
 		vi.stubGlobal("location", {protocol: "http:"})
-		const {useSetLocale} = create<typeof resources>({
+		const {useSetLocale} = create(resources, {
 			cookieSameSite: "none",
 			cookieSecure: false
 		})
@@ -122,7 +120,7 @@ describe("next/client", () => {
 		const snapshot = (
 			await createCore(resources).getTranslation("common", ["zh-Hant"])
 		).snapshot
-		const {TranslationProvider, useTranslation} = create<typeof resources>()
+		const {TranslationProvider, useTranslation} = create(resources)
 		const html = renderToString(
 			createElement(
 				TranslationProvider,
@@ -139,5 +137,39 @@ describe("next/client", () => {
 		)
 
 		expect(html).toContain("zh-Hant/zh-Hant:你好")
+	})
+
+	test("loads a namespace omitted from the server seed", async () => {
+		const loadCommon = vi.fn(async () => ({greeting: "Hello"}))
+		const loadCheckout = vi.fn(async () => ({title: "Checkout"}))
+		const lazyResources = defineResources({
+			fallbackLocale: "en-US",
+			loaders: {"en-US": {common: loadCommon, checkout: loadCheckout}}
+		})
+		const snapshot = (
+			await createCore(lazyResources).getTranslation("common", ["en-US"])
+		).snapshot
+		loadCommon.mockClear()
+		const {TranslationProvider, useTranslation} = create(lazyResources)
+		const stream = await renderToReadableStream(
+			createElement(
+				TranslationProvider,
+				{initial: snapshot},
+				createElement(function Checkout() {
+					const {t} = useTranslation(["common", "checkout"])
+					return createElement(
+						"p",
+						null,
+						`${t.common.greeting}/${t.checkout.title}`
+					)
+				})
+			)
+		)
+		await stream.allReady
+		const html = await new Response(stream).text()
+
+		expect(html).toContain("Hello/Checkout")
+		expect(loadCommon).not.toHaveBeenCalled()
+		expect(loadCheckout).toHaveBeenCalledOnce()
 	})
 })
